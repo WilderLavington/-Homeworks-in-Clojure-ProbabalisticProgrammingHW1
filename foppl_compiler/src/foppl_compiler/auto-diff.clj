@@ -1,193 +1,262 @@
 
-; helper functions
+(defn normpdf [x mu sigma] (exp (+ (- 0 (/ (* (- x mu) (- x mu))
+                                                  (* 2 (* sigma sigma))))
+                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
 
-(def partial-fns
-    (reduce
-      merge
-      (list
-        {'* [(fn [a b] b) (fn [a b] a)]}
-        ; f(a,b) = a * b <-> (* a b)
-        ; df/da = b
-        ; df/db = a
+; updated parser for just such an occasion
+(def fn-function-parser
+  (insta/parser
+    "expression = '(' [' '| definition | expression | #'[a-zA-Z]+' | #'[0-9]+' | '+' | #'-'+ | '*' | '/' | '.' | '=' | '>' | '<' | '>=' | '<=' ]* ')'
+     definition = '[' (' '| definition | expression | #'[a-zA-Z]+' | #'[0-9]+' | '+' | #'-'+ | '*' | '/' | '.' | '=' | '>' | '<' | '>=' | '<=' )* ']'"))
 
-        {'- [(fn [a b] 1) (fn [a b] -1)]}
-        ; f(a,b) = a - b <-> (- a b)
-        ; df/da = 1
-        ; df/db = -1
+(defn fn-function-parse [function-string]
+  (into [] (fn-function-parser function-string))
+)
 
-        {'+ [(fn [a b] 1) (fn [a b] 1)]}
-        ; f(a,b) = a + b <-> (+ a b)
-        ; df/da = 1
-        ; df/db = 1
+(defn fn-clean-expression [definition-vector]
+ (fix-decimal-notation (into [] (filter #(not (or (= " " %) (= "(" %) (= ")" %) (= "\n" %)   ))
+ 		definition-vector) )))
 
-        {'/ [(fn [a b] (/ 1 b)) (fn [a b] (* a (/ -1 (* b b))))]}
-        ; f(a,b) = a / b <-> (/ a b)
-        ; df/da = 1
-        ; df/db = -1/b^2
+(defn fn-clean-definition [definition-vector]
+ (fix-decimal-notation (into [] (filter #(not (or (= " " %) (= "[" %) (= "]" %) (= "\n" %)   ))
+ 		definition-vector) )))
 
-        {'exp [(fn [a] (exp a))]}
-        ; f(a) = (exp a)
-        ; df/da = (exp a)
-
-        {'relu [(fn [a] (if (> a 0) 1 0))]}
-        ; f(a) = (relu a)
-        ; df/da = 1 if a > 0, 0 otherwise
-
-        {'log [(fn [a] (/ 1 a))]}
-
-        {'normpdf [(fn [y m s] (observe* (normal m s) y))]}
-
-        {'sin [(fn [a] (cos a))]})))
-
-(defn normpdf [y m s]
-  (observe* (normal m s) y))
-
-(defn addd [exprl i d]
-  (if (= i 0)
-    (reduce conj [`(~'+ ~d ~(first exprl))] (subvec exprl 1))
-    (reduce conj (subvec exprl 0 i)
-            (reduce conj [`(~'+ ~d ~(get exprl i))] (subvec exprl (+ i 1))))))
-
-(defn finite-difference-expr [expr args i d]
-  `(~'/ (~'- (~expr ~@(addd args i d)) (~expr ~@args)) ~d))
-
-(defn finite-difference-grad [expr]
-  (let [[op args body] expr
-        d (gensym)
-        fdes (map #(finite-difference-expr expr args % d) (range (count args)))
-        argsyms (map (fn [x] `(~'quote ~x)) args)]
-    `(~'fn [~@args]
-       (~'let [~d 0.001]
-         ~(zipmap argsyms fdes)))))
+(defn fn-create-ast [parsed-function]
+  (into [] (cond
+    (= :expression (get parsed-function 0))
+      (for [x (fn-clean-expression parsed-function)]
+        (if (vector? x)
+          (fn-create-ast x)
+          x
+          )
+      )
+    (= :definition (get parsed-function 0))
+      (for [x  (fn-clean-definition parsed-function)]
+        (if (vector? x)
+          (fn-create-ast x)
+          x
+          )
+      )
+    :else
+    	nil
+    ))
+  )
 
 
 
 ; need to fix what is being passed where, the function is evaluating through
-(defn function-logic-builder [general-ast, variables]
+(defn function-logic-builder [general-ast, variables, argument]
     ; recursively set up our function evaluator tree
     (cond
       (vector? general-ast)
         (cond
+
+          (= (second general-ast) "if")
+              ; if wont return any intermediary info, we will just eval + collapse
+              (if (function-logic-builder (nth general-ast 2) variables argument)
+                  ; then generate the graph that is created
+                  (function-logic-builder (nth general-ast 3) variables argument)
+                  (function-logic-builder (nth general-ast 4) variables argument))
+
+          ; just in case we run into an if statement
+          (= (second general-ast) ">")
+            (> (get (function-logic-builder (nth general-ast 2) variables argument) :forward-pass-eval)
+               (get (function-logic-builder (nth general-ast 3) variables argument) :forward-pass-eval))
+          (= (second general-ast) "<")
+            (< (get (function-logic-builder (nth general-ast 2) variables argument) :forward-pass-eval)
+               (get (function-logic-builder (nth general-ast 3) variables argument) :forward-pass-eval))
+          (= (second general-ast) ">=")
+            (>= (get (function-logic-builder (nth general-ast 2) variables argument) :forward-pass-eval)
+                (get (function-logic-builder (nth general-ast 3) variables argument) :forward-pass-eval))
+          (= (second general-ast) "<=")
+            (<= (get (function-logic-builder (nth general-ast 2) variables argument) :forward-pass-eval)
+                (get (function-logic-builder (nth general-ast 3) variables argument) :forward-pass-eval))
+
+          ; now for the functions
+          (= (second general-ast) "normpdf")
+            {:node (symbol (str 'normalpdf (gensym)))
+             :arg argument
+             :fxn (fn [x mu sigma] (exp (+ (- 0 (/ (* (- x mu) (- x mu))
+                                                             (* 2 (* sigma sigma))))
+                                                  (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+             :deriv
+               {"x" (fn [x mu sigma] (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                        (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma sigma)))))
+                "mu" (fn [x mu sigma] (- 0 (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                         (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma sigma))))))
+                "sigma" (fn [x mu sigma] (/ (* (- (* (- x mu) (- x mu) ) (* sigma sigma)) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                         (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma (* sigma sigma))))))}
+             :forward-pass-eval
+             (try (apply (fn [x mu sigma] (exp (+ (- 0 (/ (* (- x mu) (- x mu))
+                                                             (* 2 (* sigma sigma))))
+                                                  (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+                [(get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+                 (get (function-logic-builder (nth general-ast 3) variables "mu") :forward-pass-eval)
+                 (get (function-logic-builder (nth general-ast 4) variables "sigma") :forward-pass-eval)] )
+             (catch Exception e (seq ['normpdf
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+                (get (function-logic-builder (nth general-ast 3) variables "mu") :forward-pass-eval)
+                (get (function-logic-builder (nth general-ast 4) variables "sigma") :forward-pass-eval)])))
+             :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")
+                                  "mu" (function-logic-builder (nth general-ast 3) variables "mu")
+                                  "sigma" (function-logic-builder (nth general-ast 4) variables "sigma")}
+             :reverse-auto-diff-eval nil }
+
           (= (second general-ast) "exp")
             {:node (symbol (str 'exp (gensym)))
+             :arg argument
              :fxn (fn [x] (exp x))
-             :deriv (fn [x] (exp x))
+             :deriv {"x" (fn [x] (exp x))}
              :forward-pass-eval
              (try (exp
-                (get (function-logic-builder (nth general-ast 2) variables) :forward-pass-eval))
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval))
              (catch Exception e (seq ['exp
-                (get (function-logic-builder (nth general-ast 2) variables) :forward-pass-eval)])))
-             :forward-pass-graph {:arg1 (function-logic-builder (nth general-ast 2) variables)}
-             :reverse-auto-diff-eval [] }
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)])))
+             :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")}
+             :reverse-auto-diff-eval nil }
 
           (= (second general-ast) "sin")
             {:node (symbol (str 'sin (gensym)))
+             :arg argument
              :fxn (fn [x] (sin x))
-             :deriv (fn [x] (cos x))
+             :deriv {"x" (fn [x] (cos x))}
              :forward-pass-eval
              (try (sin
-               (get (function-logic-builder (nth general-ast 2) variables) :forward-pass-eval))
+               (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval))
              (catch Exception e (seq ['sin
-               (get (function-logic-builder (nth general-ast 2) variables) :forward-pass-eval)])))
-             :forward-pass-graph {:arg1 (function-logic-builder (nth general-ast 2) variables)}
-             :reverse-auto-diff-eval [] }
+               (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)])))
+             :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")}
+             :reverse-auto-diff-eval nil }
 
           (= (second general-ast) "cos")
             {:node (symbol (str 'cos (gensym)))
+             :arg argument
              :fxn (fn [x] (cos x))
-             :deriv (fn [x] (- (sin x)))
+             :deriv {"x" (fn [x] (- (sin x)))}
              :forward-pass-eval
              (try (cos
-                (get (function-logic-builder (nth general-ast 2) variables) :forward-pass-eval))
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval))
              (catch Exception e (seq ['cos
-                (get (function-logic-builder (nth general-ast 2) variables) :forward-pass-eval)])))
-             :forward-pass-graph {:arg1 (function-logic-builder (nth general-ast 2) variables)}
-             :reverse-auto-diff-eval [] }
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)])))
+             :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")}
+             :reverse-auto-diff-eval nil }
 
           (= (second general-ast) "log")
             {:node (symbol (str 'log (gensym)))
+             :arg argument
              :fxn (fn [x] (log x))
-             :deriv (fn [x] (/ 1 x))
+             :deriv {"x" (fn [x] (/ 1 x))}
              :forward-pass-eval
              (try (log
-                (get (function-logic-builder (nth general-ast 2) variables) :forward-pass-eval))
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval))
              (catch Exception e (seq ['log
-                (get (function-logic-builder (nth general-ast 2) variables) :forward-pass-eval)])))
-             :forward-pass-graph {:arg1 (function-logic-builder (nth general-ast 2) variables)}
-             :reverse-auto-diff-eval [] }
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)])))
+             :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")}
+             :reverse-auto-diff-eval nil }
 
+          ; and the primitives
           (= (second general-ast) "+")
             {:node (symbol (str '+ (gensym)))
+             :arg argument
              :fxn (fn [x y] (+ x y))
-             :grad (fn [x y] [1 1])
+             :deriv { "x" (fn [x y] 1)
+                      "y" (fn [x y] 1)}
              :forward-pass-eval
              (try (+
-               (get (first (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)
-               (get (second (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval))
+               (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+               (get (function-logic-builder (nth general-ast 3) variables "y") :forward-pass-eval))
              (catch Exception e (seq ['+
-               (get (first (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)
-               (get (second (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)])))
-             :forward-pass-graph {:arg1 (function-logic-builder (nth general-ast 2) variables)
-                                  :arg2 (function-logic-builder (nth general-ast 3) variables)}
-             :reverse-auto-diff-eval [] }
+               (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+               (get (function-logic-builder (nth general-ast 3) variables "y") :forward-pass-eval)])))
+             :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")
+                                  "y" (function-logic-builder (nth general-ast 3) variables "y")}
+             :reverse-auto-diff-eval nil }
 
           (= (second general-ast) "-")
             {:node (symbol (str '- (gensym)))
+             :arg argument
              :fxn (fn [x y] (- x y))
-             :grad (fn [x y] [1 -1])
+             :deriv { "x" (fn [x y] 1)
+                      "y" (fn [x y] -1)}
              :forward-pass-eval
              (try (-
-                (get (first (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)
-                (get (second (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval))
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+                (get (function-logic-builder (nth general-ast 3) variables "y") :forward-pass-eval))
              (catch Exception e (seq ['-
-                (get (first (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)
-                (get (second (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)])))
-             :forward-pass-graph {:arg1 (function-logic-builder (nth general-ast 2) variables)
-                                  :arg2 (function-logic-builder (nth general-ast 3) variables)}
-             :reverse-auto-diff-eval [] }
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+                (get (function-logic-builder (nth general-ast 3) variables "y") :forward-pass-eval)])))
+             :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")
+                                  "y" (function-logic-builder (nth general-ast 3) variables "y")}
+             :reverse-auto-diff-eval nil }
 
           (= (second general-ast) "*")
             {:node (symbol (str '* (gensym)))
+             :arg argument
              :fxn (fn [x y] (* x y))
-             :deriv (fn [x y] [y x])
+             :deriv {"x" (fn [x y] y)
+                     "y" (fn [x y] x)}
              :forward-pass-eval
              (try (*
-                (get (first (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)
-                (get (second (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval))
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+                (get (function-logic-builder (nth general-ast 3) variables "y") :forward-pass-eval))
              (catch Exception e (seq ['*
-                (get (first (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)
-                (get (second (function-logic-builder (nth general-ast 2) variables)) :forward-pass-eval)])))
-             :forward-pass-graph {:arg1 (function-logic-builder (nth general-ast 2) variables)
-                                  :arg2 (function-logic-builder (nth general-ast 3) variables)}
-             :reverse-auto-diff-eval [] }
+                (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+                (get (function-logic-builder (nth general-ast 3) variables "y") :forward-pass-eval)])))
+             :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")
+                                  "y" (function-logic-builder (nth general-ast 3) variables "y")}
+             :reverse-auto-diff-eval nil }
+
+         (= (second general-ast) "/")
+           {:node (symbol (str '* (gensym)))
+            :arg argument
+            :fxn (fn [x y] (/ x y))
+            :deriv {"x" (fn [x y] (/ 1 y))
+                    "y" (fn [x y] (* x (/ -1 (* y y))))}
+            :forward-pass-eval
+            (try (/
+               (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+               (get (function-logic-builder (nth general-ast 3) variables "y") :forward-pass-eval))
+            (catch Exception e (seq ['/
+               (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
+               (get (function-logic-builder (nth general-ast 3) variables "y") :forward-pass-eval)])))
+            :forward-pass-graph {"x" (function-logic-builder (nth general-ast 2) variables "x")
+                                 "y" (function-logic-builder (nth general-ast 3) variables "y")}
+            :reverse-auto-diff-eval nil }
 
           :else
             (println "inner function-logic-builder error" second general-ast)
           )
 
+      ; and the base cases
       (or (integer? general-ast) (float? general-ast))
         {:node (gensym)
+         :arg argument
          :fxn (fn [] general-ast)
          :deriv (fn [] 0)
          :forward-pass-eval general-ast
          :forward-pass-graph general-ast
-         :reverse-auto-diff-eval nil}
-
-      (symbol? general-ast)
-        {:node variables
-         :fxn (fn [] variables)
-         :deriv (fn [] 0)
-         :forward-pass-eval variables
-         :forward-pass-graph variables
-         :reverse-auto-diff-eval nil}
+         :reverse-auto-diff-eval 0}
 
       (string? general-ast)
-        {:node variables
-         :fxn (fn [] variables)
-         :deriv (fn [] 0)
-         :forward-pass-eval variables
-         :forward-pass-graph variables
-         :reverse-auto-diff-eval nil}
+        ; check if its a stored function or a string val
+        (if (get variables general-ast)
+        ; if its a variable
+          {:node general-ast
+           :arg argument
+           :fxn (fn [] (get variables general-ast))
+           :deriv (fn [] 1)
+           :forward-pass-eval (get variables general-ast)
+           :forward-pass-graph (get variables general-ast)
+           :reverse-auto-diff-eval 0}
+        ; if its not.
+           {:node general-ast
+            :arg argument
+            :fxn (fn [] (read-string general-ast))
+            :deriv (fn [] 0)
+            :forward-pass-eval (read-string general-ast)
+            :forward-pass-graph (read-string general-ast)
+            :reverse-auto-diff-eval 0}
+          )
 
       :else
         (println "outer function-logic-builder error" general-ast)
@@ -200,15 +269,17 @@
      :forward-graph (into [] (nth (nth general-ast 1) 3))
      :backward-graph [] }
   )
+
 (defn print-graph [g]
+  (println ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ")
   (println ":node " (get g :node))
+  (println ":argument " (get g :arg))
   (println ":fxn " (get g :fxn))
   (println ":deriv " (get g :deriv))
   (println ":forward-pass-eval " (get g :forward-pass-eval))
   (println ":reverse-auto-diff-eval " (get g :reverse-auto-diff-eval))
-  ;(println ":forward-pass-graph " (get g :forward-pass-graph ))
-  ;(println ":reverse-pass " (get g :reverse-pass))
   )
+
 (defn print-graph-forward-evals [g]
   ; check if there are lower levels to display
   (if (map? g)
@@ -218,23 +289,117 @@
   ; are those lower levels variables or another graph
   (if (map? g)
     (if (map? (get g :forward-pass-graph))
-      (for [sub-graphs (into [] (vals (get g :forward-pass-graph)))]
+      (doseq [sub-graphs (into [] (vals (get g :forward-pass-graph)))]
         (print-graph-forward-evals sub-graphs)
       )))
     )
 
-(defn reverse-mode-auto-diff [g, last-partial, last-partial-eval, level] ; takes in an eval graph made above.
-    ; check that we havent hit bottom and update
-    (if (map? g)
-      (if (map? (get g :forward-pass-graph))
-          (first (for [sub-graphs (into [] (vals (get g :forward-pass-graph)))]
-          (reverse-mode-auto-diff
-                  sub-graphs
-                  (get g :deriv)
-                  (* (last-partial (get g :forward-pass-eval))  last-partial-eval)
-                  (inc level))))
-          (* (last-partial (get g :forward-pass-graph))  last-partial-eval)
-                  )
-        last-partial-eval
-        )
-      )
+(defn n-args [f]
+    (-> f class .getDeclaredMethods first .getParameterTypes alength))
+
+(defn function-map [variable-map function]
+  (cond
+    (= (n-args function) 1)
+      (apply function [(get variable-map "x")])
+    (= (n-args function) 2)
+      (apply function [(get variable-map "x")
+                       (get variable-map "y")])
+    (= (n-args function) 3)
+      (apply function [(get variable-map "x")
+                       (get variable-map "mu")
+                       (get variable-map "sigma")])
+    :else
+      (println "not ready for this function just yet"))
+  )
+
+(defn generate-variable-map [g]
+  (into [] (merge (let [argument-variable (into [] (keys (get g :forward-pass-graph)))
+               sub-graphs (into [] (vals (get g :forward-pass-graph)))]
+             (for [index (into [] (take (count argument-variable) (range)))]
+                { (get (nth sub-graphs index) :arg)
+                  (get (nth sub-graphs index) :forward-pass-eval) }
+             )))))
+
+(defn reverse-mode-auto-diff [g, last-partial-eval, level] ; takes in an eval graph made above.
+      ; check that we are still in a map
+      (if (map? g)
+        ; check if we have hit bottom
+        (if (map? (get g :forward-pass-graph))
+            ; if we have not, we are going to update the reverse mode pass in our current g
+            {:node (get g :node)
+             :arg (get g :arg)
+             :fxn (get g :fxn)
+             :deriv (get g :deriv)
+             :forward-pass-eval (get g :forward-pass-eval)
+             :forward-pass-graph
+            (try
+                  (let [argument-variable (into [] (keys (get g :forward-pass-graph)))
+                        sub-graphs (into [] (vals (get g :forward-pass-graph)))]
+
+                      (into {} (merge
+                        (for [index (into [] (take (count argument-variable) (range)))]
+                           {(nth argument-variable index)
+                           (reverse-mode-auto-diff
+                                     (nth sub-graphs index)
+                                     (* (function-map (apply merge (generate-variable-map g)) (get (get g :deriv)
+                                     (nth argument-variable index)))
+                                        last-partial-eval)
+                                     (inc level))}
+
+                         ))))
+            (catch Exception e (println "\n error!!! \n" level "\n error!!!\n")))
+            :reverse-auto-diff-eval
+                last-partial-eval
+            }
+
+            ; if we are at a leaf then we need only one update
+            (if (or (integer? (read-string (get g :node))) (float? (read-string (get g :node))))
+                  {:node (get g :node)
+                   :fxn (get g :fxn)
+                   :deriv (get g :deriv)
+                   :forward-pass-eval (get g :forward-pass-eval)
+                   :forward-pass-graph (get g :forward-pass-eval)
+                   :reverse-auto-diff-eval
+                      0
+                   }
+                  {:node (get g :node)
+                   :fxn (get g :fxn)
+                   :deriv (get g :deriv)
+                   :forward-pass-eval (get g :forward-pass-eval)
+                   :forward-pass-graph (get g :forward-pass-eval)
+                   :reverse-auto-diff-eval
+                      last-partial-eval
+                   })
+             )
+          (println "error" g last-partial-eval)
+          )
+
+    )
+
+(defn dissoc-by [f m] (->> m (filter #(f (first %))) (into {})))
+
+(defn calculate-gradient-helper [reverse-mode-graph gradient]
+     (flatten [(if (map? reverse-mode-graph)
+       ; check if we have hit bottom
+       (if (map? (get reverse-mode-graph :forward-pass-graph))
+          (into [] (for [sub-graphs (into [] (vals (get reverse-mode-graph :forward-pass-graph)))]
+               (calculate-gradient-helper sub-graphs gradient)))
+          (if (contains? gradient (get reverse-mode-graph :node))
+              (assoc gradient (get reverse-mode-graph :node) (+ (get gradient (get reverse-mode-graph :node)) (get reverse-mode-graph :reverse-auto-diff-eval)))
+              (assoc gradient (get reverse-mode-graph :node) (get reverse-mode-graph :reverse-auto-diff-eval)) ))
+       (println "error g is not a map"))])
+    )
+
+(defn calculate-gradient [reverse-mode-graph gradient]
+    (let [total-grad (into [] (calculate-gradient-helper reverse-mode-graph gradient)) ]
+      (dissoc-by #(not (or (integer? (read-string %)) (float? (read-string %)))) (apply merge-with + total-grad))
+    )
+  )
+
+(defn numerical-approx [function values h]
+  (for [dim (into [] (take (count values) (range)))]
+    (* (/ 1 h) (* 0.5 (- (apply function (assoc values dim (+ (get values dim) h)))
+       (apply function (assoc values dim (- (get values dim) h))))) ) )
+  )
+
+;(defn assignment-wrapper )

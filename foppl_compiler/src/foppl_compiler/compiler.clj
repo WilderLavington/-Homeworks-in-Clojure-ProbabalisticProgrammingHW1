@@ -29,7 +29,6 @@
  "remove elem in coll"
  [coll pos]
  (vec (concat (subvec coll 0 pos) (subvec coll (inc pos)))))
-
 (defn combine-dash-notation [v]
  (if (some #(= "-" %) v)
    (cond
@@ -46,32 +45,36 @@
 ; need to fix notation for when _ exists as empty argument
 (defn combine-underscore-notation [v]
   (if (some #(= "_" %) v)
- 	(combine-underscore-notation (vec-remove (vec-remove (assoc v (.indexOf v "_") (str (nth v (- (.indexOf v "_") 1)) (nth v (.indexOf v "_")) (nth v (+ 1 (.indexOf v "_"))))) (+ (.indexOf v "_") 1)) (- (.indexOf v "_") 1)))
+ 	(combine-underscore-notation
+    (vec-remove (vec-remove
+      (assoc v (.indexOf v "_") (str (nth v (- (.indexOf v "_") 1)) (nth v (.indexOf v "_")) (nth v (+ 1 (.indexOf v "_"))))) (+ (.indexOf v "_") 1)) (- (.indexOf v "_") 1)))
     v
     )
    )
 (defn fix-decimal-notation [v]
  (if (some #(= "." %) v)
- 	(fix-decimal-notation (vec-remove (vec-remove (assoc v (.indexOf v ".") (str (nth v (- (.indexOf v ".") 1)) (nth v (.indexOf v ".")) (nth v (+ 1 (.indexOf v "."))))) (+ (.indexOf v ".") 1)) (- (.indexOf v ".") 1)))
+ 	(fix-decimal-notation
+    (vec-remove
+      (vec-remove
+        (assoc v (.indexOf v ".")
+          (str (nth v (- (.indexOf v ".") 1)) (nth v (.indexOf v ".")) (nth v (+ 1 (.indexOf v ".")))))
+        (+ (.indexOf v "." ) 1)) (- (.indexOf v ".") 1)))
    v)
    )
-
 (defn function-parse [function-string]
  (into [] (function-parser function-string))
  )
 (defn contains-val?
  [coll val]
  (reduce #(if (= val %2) (reduced true) %1) false coll))
-
 (defn clean-expression [expression-vector]
- (combine-dash-notation (fix-decimal-notation (combine-underscore-notation (into [] (filter #(not (or (= " " %) (= "(" %) (= ")" %) (= "\n" %)   ))
- 		expression-vector) ))))
+ (combine-dash-notation (fix-decimal-notation (into [] (filter #(not (or (= " " %) (= "(" %) (= ")" %) (= "\n" %)   ))
+ 		expression-vector) )))
  )
 (defn clean-definition [definition-vector]
- (combine-dash-notation (fix-decimal-notation (combine-underscore-notation (into [] (filter #(not (or (= " " %) (= "[" %) (= "]" %) (= "\n" %)   ))
- 		definition-vector) ))))
+ (combine-dash-notation (fix-decimal-notation (into [] (filter #(not (or (= " " %) (= "[" %) (= "]" %) (= "\n" %)   ))
+ 		definition-vector) )))
  )
-
 (defn contains-vector [vector-ish-thing]
    (not (every? #{0}
      (for [x  vector-ish-thing]
@@ -80,7 +83,6 @@
  )
 (defn split-at' [idx v]
    [ [(subvec v 0 idx)] [(subvec v idx)] ] )
-
 (defn get-lets-pairs [current-vector]
 	(cond
    	(= 2 (count current-vector))
@@ -93,7 +95,6 @@
      		(conj (get-lets-pairs (get (split-at 2 current-vector) 1)) (get (split-at 2 current-vector) 0))
      )
   )
-
 (defn create-ast [parsed-function]
   (into [] (cond
     (= :expression (get parsed-function 0))
@@ -114,8 +115,6 @@
     	nil
     ))
   )
-
-; non-random expressions within defitions
 (defn get-random-variables [let-definition]
   (remove nil? (for [definition let-definition]
   	(cond
@@ -138,7 +137,6 @@
       )
     ))
   )
-
 (defn replace-val-in-nested-vector [nested-vector value replacement]
   (into [] (for [element nested-vector]
     (cond
@@ -155,153 +153,150 @@
   )
 
 (defn definition-logic-builder [current-vector]
+  (cond
+    (= nil current-vector)
+    	[]
+   	(= :expression (get current-vector 0))
+    	(cond
+  			; catch to ensure we store multiple function statements
+           (every? #(vector? %) (drop 1 current-vector))
+          		(for [x (drop 1 current-vector)]
+                  (definition-logic-builder x)
+                  )
 
-(cond
-  (= nil current-vector)
-  	[]
- 	(= :expression (get current-vector 0))
-  	(cond
-			; catch to ensure we store multiple function statements
-        	(every? #(vector? %) (drop 1 current-vector))
-        		(for [x (drop 1 current-vector)]
-                (definition-logic-builder x)
-                )
+        		; the let
+    			 (= "let" (get current-vector 1))
+                [:let ;defines variable values
+                  	  [:let-variables
+                       (into [] (for [x (get-lets-pairs (into [] (rest (first (drop 2 current-vector)))))]
+                  			[:variable_id (gensym)
+                   			 :variable_name (symbol (first x))
+                   			 :value  (definition-logic-builder (last x))]
+                  				))]
+                      [:let-return
+                       	; if there are multiple statements, and a return value
+                       	(into [] (for [statement (drop 3 current-vector) ]
+                          [:statement (definition-logic-builder statement)]))
+                      	]
 
-      		; the let
-  			(= "let" (get current-vector 1))
-              [:let ;defines variable values
-                	  [:let-variables
-                     (into [] (for [x (get-lets-pairs (into [] (rest (first (drop 2 current-vector)))))]
-                			[:variable_id (gensym)
-                 			 :variable_name (symbol (first x))
-                 			 :value  (definition-logic-builder (last x))]
-                				))]
-                    [:let-return
-                     	; if there are multiple statements, and a return value
-                     	(into [] (for [statement (drop 3 current-vector) ]
-                        [:statement (definition-logic-builder statement)]))
-                    	]
+                  ]
 
-                ]
-
-        	; more basic functions
-        	(= "if" (get current-vector 1))
-        		[:apply 'if
-               :predicate (definition-logic-builder (get current-vector 2))
-               :then (definition-logic-builder (get current-vector 3))
-               :else (definition-logic-builder (get current-vector 4))]
-        	(= "=" (get current-vector 1))
-        		[:apply '= :arg1 (definition-logic-builder (get current-vector 2))
-               		   :arg2 (definition-logic-builder (get current-vector 3))]
-        	(= "vector" (get current-vector 1))
-        		(into []  (definition-logic-builder (into [] (rest (rest current-vector)))))
+          	; more basic functions
+          	(= "if" (get current-vector 1))
+          		[:apply 'if
+                 :predicate (definition-logic-builder (get current-vector 2))
+                 :then (definition-logic-builder (get current-vector 3))
+                 :else (definition-logic-builder (get current-vector 4))]
+          	(= "=" (get current-vector 1))
+          		[:apply '= :arg1 (definition-logic-builder (get current-vector 2))
+                 		   :arg2 (definition-logic-builder (get current-vector 3))]
+          	(= "vector" (get current-vector 1))
+          		(into []  (definition-logic-builder (into [] (rest (rest current-vector)))))
             (= "first" (get current-vector 1))
-        		[:apply 'first :arg (definition-logic-builder (get current-vector 2))]
-        	(= "second" (get current-vector 1))
-        		[:apply 'second :arg (definition-logic-builder (get current-vector 2))]
-        	(= "drop" (get current-vector 1))
-        		[:apply 'drop :arg (definition-logic-builder (get current-vector 2))]
-        	(= "rest" (get current-vector 1))
-				[:apply 'rest :arg (definition-logic-builder (get current-vector 2))]
-        	(= "loop" (get current-vector 1))
-       			(desugar-loop-statment (definition-logic-builder (get current-vector 2))
-                                       (definition-logic-builder (get current-vector 3))
-                                       (definition-logic-builder (get current-vector 4))
-                                       (into [] (for [x  (drop 5 current-vector)] (definition-logic-builder x))) )
+          		[:apply 'first :arg (definition-logic-builder (get current-vector 2))]
+          	(= "second" (get current-vector 1))
+          		[:apply 'second :arg (definition-logic-builder (get current-vector 2))]
+          	(= "drop" (get current-vector 1))
+          		[:apply 'drop :arg (definition-logic-builder (get current-vector 2))]
+          	(= "rest" (get current-vector 1))
+  				    [:apply 'rest :arg (definition-logic-builder (get current-vector 2))]
+          	(= "loop" (get current-vector 1))
+         			(desugar-loop-statment (definition-logic-builder (get current-vector 2))
+                                         (definition-logic-builder (get current-vector 3))
+                                         (definition-logic-builder (get current-vector 4))
+                                         (into [] (for [x  (drop 5 current-vector)] (definition-logic-builder x))) )
 
 
-        	(= "sqrt" (get current-vector 1))
-        		[:apply 'sqrt :arg (definition-logic-builder (get current-vector 2))]
-          	(= "conj" (get current-vector 1))
-        		(into [] (remove nil? (conj [(definition-logic-builder (get current-vector 2))] (definition-logic-builder (get current-vector 3)) )))
+          	(= "sqrt" (get current-vector 1))
+          		[:apply 'sqrt :arg (definition-logic-builder (get current-vector 2))]
+            (= "conj" (get current-vector 1))
+          		(into [] (remove nil? (conj [(definition-logic-builder (get current-vector 2))] (definition-logic-builder (get current-vector 3)) )))
 
-      		(= "append" (get current-vector 1))
-        		(println "error - need to impliment" (get current-vector 1))
-        	(= "foreach" (get current-vector 1))
-        		(println "error - need to impliment" (get current-vector 1))
+        		(= "append" (get current-vector 1))
+          		(println "error - need to impliment" (get current-vector 1))
+          	(= "foreach" (get current-vector 1))
+          		(println "error - need to impliment" (get current-vector 1))
 
-        	; user defined functions
-        	(= "defn" (get current-vector 1))
-        		[:function-name (definition-logic-builder (get current-vector 2))
-                  ;defines variable values
-                 :function-variables
-                     	(into [] (for [x (definition-logic-builder (first (drop 3 current-vector)))]
-                			[:variable_id (gensym)
-                 			 :variable_name (symbol x)]
-                				) )
-                 :function-return
-                     	; if there are multiple statements, and a return value
-                     	(into [] (for [statement (drop 4 current-vector) ]
-                        (definition-logic-builder statement)))
-                    	]
+          	; user defined functions
+          	(= "defn" (get current-vector 1))
+          		[:function-name (definition-logic-builder (get current-vector 2))
+                    ;defines variable values
+                   :function-variables
+                       	(into [] (for [x (definition-logic-builder (first (drop 3 current-vector)))]
+                  			[:variable_id (gensym)
+                   			 :variable_name (symbol x)]
+                  				) )
+                   :function-return
+                       	; if there are multiple statements, and a return value
+                       	(first (into [] (drop 4 current-vector)))
+                      	]
 
 
-        	; random variable type functions
-          	(= "sample" (get current-vector 1))
-        		[:sampled (definition-logic-builder (get current-vector 2))]
-          	(= "observe" (get current-vector 1))
-        		; there seems to be some sort of issue here - but its from evaluation of first and rest on "data"
-  				[:observe :random-variable (definition-logic-builder (get current-vector 2)) :values-observed (definition-logic-builder (get current-vector 3))]
+          	; random variable type functions
+            (= "sample" (get current-vector 1))
+          		  [:sampled (definition-logic-builder (get current-vector 2))]
+            (= "observe" (get current-vector 1))
+    				    [:observe :random-variable (definition-logic-builder (get current-vector 2)) :values-observed (definition-logic-builder (get current-vector 3))]
 
-         	; random variable type functions
-         	(= "normal" (get current-vector 1))
-  				[(keyword "normal")
-                 [:mu (definition-logic-builder (get current-vector 2))
-                  :sigma (definition-logic-builder (get current-vector 3))]]
-         	(= "beta" (get current-vector 1))
-  				[(keyword "beta")
-                 [:alpha (definition-logic-builder (get current-vector 2))
-                  :beta (definition-logic-builder (get current-vector 3))]]
-         	(= "bernoulli" (get current-vector 1))
-  				[(keyword "bernoulli")
-                 [:p (definition-logic-builder (get current-vector 2))]]
-		    (= "discrete" (get current-vector 1))
-        		[:p (definition-logic-builder (get current-vector 2))]
+           	; random variable type functions
+           	(= "normal" (get current-vector 1))
+    				    [(keyword "normal")
+                   [:mu (definition-logic-builder (get current-vector 2))
+                    :sigma (definition-logic-builder (get current-vector 3))]]
+           	(= "beta" (get current-vector 1))
+    				    [(keyword "beta")
+                   [:alpha (definition-logic-builder (get current-vector 2))
+                    :beta (definition-logic-builder (get current-vector 3))]]
+           	(= "bernoulli" (get current-vector 1))
+    				    [(keyword "bernoulli")
+                   [:p (definition-logic-builder (get current-vector 2))]]
+  		      (= "discrete" (get current-vector 1))
+          		[:p (definition-logic-builder (get current-vector 2))]
 
-          ; primitive operations
-        	(= "+" (get current-vector 1))
-        		[:apply '+ :argument1 (definition-logic-builder (get current-vector 2)) :argument2 (definition-logic-builder (get current-vector 3))]
-        	(= "-" (get current-vector 1))
-				[:apply '- :argument1 (definition-logic-builder (get current-vector 2)) :argument2 (definition-logic-builder (get current-vector 3))]
-        	(= "*" (get current-vector 1))
-				[:apply '* :argument1 (definition-logic-builder (get current-vector 2)) :argument2 (definition-logic-builder (get current-vector 3))]
-        	(= "/" (get current-vector 1))
-				[:apply '/ :argument1 (definition-logic-builder (get current-vector 2)) :argument2 (definition-logic-builder (get current-vector 3))]
+            ; primitive operations
+          	(= "+" (get current-vector 1))
+          		[:apply '+ :argument1 (definition-logic-builder (get current-vector 2)) :argument2 (definition-logic-builder (get current-vector 3))]
+          	(= "-" (get current-vector 1))
+  				    [:apply '- :argument1 (definition-logic-builder (get current-vector 2)) :argument2 (definition-logic-builder (get current-vector 3))]
+          	(= "*" (get current-vector 1))
+  				    [:apply '* :argument1 (definition-logic-builder (get current-vector 2)) :argument2 (definition-logic-builder (get current-vector 3))]
+          	(= "/" (get current-vector 1))
+  				    [:apply '/ :argument1 (definition-logic-builder (get current-vector 2)) :argument2 (definition-logic-builder (get current-vector 3))]
             (= "exp" (get current-vector 1))
-        		[:apply 'exp :argument (get current-vector 2)]
-        	(= "sqrt" (get current-vector 1))
-        		[:apply 'sqrt :argument (get current-vector 2)]
+          		[:apply 'exp :argument (get current-vector 2)]
+          	(= "sqrt" (get current-vector 1))
+          		[:apply 'sqrt :argument (get current-vector 2)]
 
-        	; if its just a number
-         	(or (float? (get current-vector 1)) (integer? (get current-vector 1)))
-  				(get current-vector 1)
+          	; if its just a number
+           	(or (float? (get current-vector 1)) (integer? (get current-vector 1)))
+    				(get current-vector 1)
 
-         ; otherwise assume we inside a user defined function
-         :else
-              [:user-apply (symbol (get current-vector 1))
-               :args (into [] (for [var (into [] (drop 2 current-vector))] (read-string var)))
-               ])
+           ; otherwise assume we inside a user defined function
+           :else
+                [:user-apply (symbol (get current-vector 1))
+                 :args (into [] (for [var (into [] (drop 2 current-vector))] (read-string var)))
+                 ])
 
-  (= :definition (get current-vector 0))
-  	(cond
-        	(= (count current-vector) 1)
-        		nil
-  		    (and (string? (get current-vector 1)) )
-        		(definition-logic-builder (into [] (drop 1 current-vector)))
-        	(or (float? (get current-vector 1)) (integer? (get current-vector 1)))
-  				(drop 1 current-vector)
+    (= :definition (get current-vector 0))
+    	(cond
+          	(= (count current-vector) 1)
+          		nil
+    		    (and (string? (get current-vector 1)) )
+          		(definition-logic-builder (into [] (drop 1 current-vector)))
+          	(or (float? (get current-vector 1)) (integer? (get current-vector 1)))
+    				(drop 1 current-vector)
 
-          :else
-              (println "jeez idk definition" current-vector)
-        )
+            :else
+                (println "jeez idk definition" current-vector)
+          )
 
-  :else
-  	(if (vector? current-vector)
-        (for [x current-vector] (definition-logic-builder x) )
-        (read-string current-vector)
-        )
+    :else
+    	(if (vector? current-vector)
+          (for [x current-vector] (definition-logic-builder x) )
+          (read-string current-vector)
+          )
+    )
   )
-)
 
 ; reorder-dependencies in let definition so we dont have conflicts and can define as we go.
 (defn indices [pred coll]
@@ -398,10 +393,6 @@
   (de-sugar-let-statement (vec (definition-logic-builder (create-ast (function-parse (str foppl-code ))))))
   )
 
-; find all vector expressions and apply them to their arguments
-
-; desugar loop statement
-
 (defn get-let-variable-name [de-sugered-let-statement]
       (nth (nth (nth de-sugered-let-statement 1) 1) 3))
 (defn get-let-variable-value [de-sugered-let-statement]
@@ -440,7 +431,6 @@
           (catch Exception e  (seq [primitive (get g :E)]) )  )
        }
     )
-
 (defn merge-graphs [g1 g2]
     ; takes a union of vertices, edges, partial functions, observations
     ; then reduces partial functons so we only have link functions between rv
@@ -514,8 +504,6 @@
       )
     )
 
-
-
 (defn get-free-variables [E phi rho]
     (try
        (cond
@@ -549,7 +537,6 @@
         )
       (catch Exception e (println "get-free-variables [E phi rho]" (translate (get E :mean)) phi rho)))
     )
-
 (defn get-user-fxn-variables [user-fxn-syntax]
   (for [variable (nth (second user-fxn-syntax) 3)]
     (nth variable 3)
@@ -573,20 +560,18 @@
                (replace-val-in-nested-vector updated-statement (nth variables iter) (nth new-args iter))
           ))))
   )
-
-(defn desuger-statements [statements] ;[[statement: statement1] [statement: statement2] [statement: statement3]]
+(defn desuger-statements [statements]
     (into [] (for [statement statements]
       (if (= :let (first (second statements)))
           (de-sugar-let-statement [(second statements)])
           statement
       )
     )))
-
-
 (defn foppl-compiler [foppl-code]
 
     ; sugared code
     (def suger-code (vec (definition-logic-builder (create-ast (function-parse (str foppl-code ))))))
+
 
     ; get user defined functions
    	(def rho (into {} (remove nil? (for [program suger-code]
@@ -607,6 +592,7 @@
             (de-sugar-let-statement [statements])
              statements ))))
 
+
     ; iterate through each of the statements and desugar
     (def de-sugared-rho
       (into []
@@ -622,16 +608,15 @@
                 (get rho user-funcs))
               (get rho user-funcs))
             (get rho user-funcs)))))
+
   	(println "==================================================================")
    	(println "here is the graph: \n \n" (translate (first de-sugared-statements) true de-sugared-rho))
   	(println "")
- 	  (println "here are the number of arcs: " (count (get-in (translate (first de-sugared-statements) true de-sugared-rho) [:G :A])) )
+  	  (println "here are the number of arcs: " (count (get-in (translate (first de-sugared-statements) true de-sugared-rho) [:G :A])) )
    	(println "")
   	(println "here are the number of vertices: " (count (get-in (translate (first de-sugared-statements) true de-sugared-rho) [:G :V])) )
     (println "==================================================================")
   )
-
-
 (defn translate [branch phi rho]
   	(cond
 
