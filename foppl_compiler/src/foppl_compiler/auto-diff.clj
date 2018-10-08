@@ -3,47 +3,6 @@
                                                   (* 2 (* sigma sigma))))
                                        (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
 
-; updated parser for just such an occasion
-(def fn-function-parser
-  (insta/parser
-    "expression = '(' [' '| definition | expression | #'[a-zA-Z]+' | #'[0-9]+' | '+' | #'-'+ | '*' | '/' | '.' | '=' | '>' | '<' | '>=' | '<=' ]* ')'
-     definition = '[' (' '| definition | expression | #'[a-zA-Z]+' | #'[0-9]+' | '+' | #'-'+ | '*' | '/' | '.' | '=' | '>' | '<' | '>=' | '<=' )* ']'"))
-
-(defn fn-function-parse [function-string]
-  (into [] (fn-function-parser function-string))
-)
-
-(defn fn-clean-expression [definition-vector]
- (fix-decimal-notation (into [] (filter #(not (or (= " " %) (= "(" %) (= ")" %) (= "\n" %)   ))
- 		definition-vector) )))
-
-(defn fn-clean-definition [definition-vector]
- (fix-decimal-notation (into [] (filter #(not (or (= " " %) (= "[" %) (= "]" %) (= "\n" %)   ))
- 		definition-vector) )))
-
-(defn fn-create-ast [parsed-function]
-  (into [] (cond
-    (= :expression (get parsed-function 0))
-      (for [x (fn-clean-expression parsed-function)]
-        (if (vector? x)
-          (fn-create-ast x)
-          x
-          )
-      )
-    (= :definition (get parsed-function 0))
-      (for [x  (fn-clean-definition parsed-function)]
-        (if (vector? x)
-          (fn-create-ast x)
-          x
-          )
-      )
-    :else
-    	nil
-    ))
-  )
-
-
-
 ; need to fix what is being passed where, the function is evaluating through
 (defn function-logic-builder [general-ast, variables, argument]
     ; recursively set up our function evaluator tree
@@ -263,13 +222,6 @@
       )
     )
 
-(defn get-expression [general-ast]
-    {:input-variables (into [] (rest (nth (nth general-ast 1) 2)))
-     :output-variables []
-     :forward-graph (into [] (nth (nth general-ast 1) 3))
-     :backward-graph [] }
-  )
-
 (defn print-graph [g]
   (println ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ")
   (println ":node " (get g :node))
@@ -402,4 +354,26 @@
        (apply function (assoc values dim (- (get values dim) h))))) ) )
   )
 
-;(defn assignment-wrapper )
+(defn create-formatted-args [variables values]
+  (into {}
+    (for [idx (into [] (take (count values) (range)))]
+      {(nth variables idx) (nth values idx)})))
+
+(defn correct-grad [variables gradient-calc]
+  (into {} (for [var variables]
+    (if (contains? gradient-calc var)
+      {var (get gradient-calc var)}
+      {var 0.0} ) ) ) )
+
+(defn autodiff [f-expression arguments]
+    ; takes in quoted expression f (i.e. '(fn ...) ) and its desired arguments then returns the
+    ; function evaluation as well as partials at that point with respect to
+    ; each of its variables (i.e. the gradient), additionally I added a numerical
+    ; check onto the return so we now we are right.
+    (let [general-ast (create-ast f-expression)]
+    (let [formatted-args (create-formatted-args (into [] (rest (nth general-ast 2))) arguments)]
+    (let [graph (reverse-mode-auto-diff (function-logic-builder (into [] (nth general-ast 3)) formatted-args "root") 1 0)]
+        {:graphical-representation graph
+         :gradient (correct-grad (into [] (rest (nth general-ast 2))) (calculate-gradient graph {}) )
+         :eval (get graph :forward-pass-eval)}
+      ))))
