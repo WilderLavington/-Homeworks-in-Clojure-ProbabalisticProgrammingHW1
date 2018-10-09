@@ -5,8 +5,8 @@
 
 (def crude-parser
   (insta/parser
-    "expression = '(' [' '| definition  | expression | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '=>' | '<=' | '+' | '-' | '*' | '/' | #'_'+ | '.' | '=' ]* ')'
-     definition = '[' (' '| definition  | expression | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '=>' | '<=' | '+' | '-' | '*' | '/' | #'_'+ | '.' | '=' )* ']'"))
+    "expression = '(' [''| ' '| definition  | expression | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '=>' | '<=' | '+' | '-' | '*' | '/' | #'_'+ | '.' | '=' ]* ')'
+     definition = '[' (''| ' '| definition  | expression | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '=>' | '<=' | '+' | '-' | '*' | '/' | #'_'+ | '.' | '=' )* ']'"))
 
 (defn crude-parse [function-string]
     (into [] (crude-parser function-string)))

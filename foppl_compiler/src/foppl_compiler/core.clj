@@ -7,7 +7,9 @@
                [anglican.runtime :refer [tanh observe* sample* normal exp cos sin log pow]]))
 
 (load-file "/Users/wilder/Desktop/foppl_compiler/src/foppl_compiler/parser.clj")
-; (load-file "/Users/wilder/Desktop/foppl_compiler/src/foppl_compiler/compiler.clj")
+(load-file "/Users/wilder/Desktop/foppl_compiler/src/foppl_compiler/helper-fxns.clj")
+(load-file "/Users/wilder/Desktop/foppl_compiler/src/foppl_compiler/ast-creation.clj")
+(load-file "/Users/wilder/Desktop/foppl_compiler/src/foppl_compiler/compiler.clj")
 (load-file "/Users/wilder/Desktop/foppl_compiler/src/foppl_compiler/auto-diff.clj")
 
 
@@ -33,96 +35,107 @@
   (println "==========================HOMEWORK 1==============================")
   (println "==================================================================")
   (println "Homework 1: Problem 1 \n")
-  (def foppl-code '( (let [mu (sample (normal -11 (sqrt 5)))
-                           mu1 (sample (normal -11.0 (sqrt 5)))
-                           mu_2 (sample (normal -11.0 (sqrt 5)))
-                           mu-3 (sample (normal -11.0 (sqrt 5)))
-                           mu1a (sample (normal -11.0 (sqrt 5)))
-                           mu_a (sample (normal -11.0 (sqrt 5)))
-                           mu-b (sample (normal -11.0 (sqrt 5)))
-                           mu_1 (sample (normal -11.1 (sqrt 5)))
-                           sigmas23 (sqrt 2)
-                           lik-lik (normal mu sigma)]
-                       (observe lik 8.0)
-                       (observe lik 0.09)
-                       mu) ) )
+  (def foppl-code '( (let [mu (sample (normal 1 (sqrt 5)))
+                           sigma (sqrt 2)
+                           lik (normal mu sigma)]
+                       (observe lik 8)
+                       (observe lik 9)
+                       mu)
+                        ))
+  (def program (program-wrapper foppl-code))
+  ;(println program)
+  (def compiled-program (foppl-compiler foppl-code))
+  (println compiled-program)
+  (println "==================================================================")
+  (println "Homework 1: Problem 2 \n")
+  (def foppl-code '( (defn observe-data [_ data slope bias]
+                            (let [xn (first data)
+                                  yn (second data)
+                                  zn (+ (* slope xn) bias)]
+                              (observe (normal zn 1.0) yn)
+                              (rest (rest data))))
+                     (let [slope (sample (normal 0.0 10.0))
+                                 bias  (sample (normal 0.0 10.0))
+                                 data (vector 1.0 2.1 2.0 3.9 3.0 5.3
+                                              4.0 7.7 5.0 10.2 6.0 12.9)]
+                       (loop 5 data observe-data slope bias)
+                       (vector slope bias)) ))
+  (def program (program-wrapper foppl-code))
+  ; (println program)
+  (def compiled-program (foppl-compiler foppl-code))
+  (println compiled-program)
 
-  (def ast (create-ast foppl-code))
+  (println "==================================================================")
+  (println "Homework 1: Problem 3 \n")
+  (def foppl-code '( (defn hmm-step [t states data trans-dists likes]
+                          (let [z (sample (get trans-dists
+                                               (last states)))]
+                            (observe (get likes z)
+                                     (get data t))
+                            (append states z)))
+                      (let [data [0.9 0.8 0.7 0.0 -0.025 -5.0 -2.0 -0.1
+                                0.0 0.13 0.45 6 0.2 0.3 -1 -1]
+                          trans-dists [(discrete [0.10 0.50 0.40])
+                                       (discrete [0.20 0.20 0.60])
+                                       (discrete [0.15 0.15 0.70])]
+                          likes [(normal -1.0 1.0)
+                                 (normal 1.0 1.0)
+                                 (normal 0.0 1.0)]
+                          states [(sample (discrete [0.33 0.33 0.34]))]]
+                      (loop 16 states hmm-step data trans-dists likes)) ))
+  (def program (program-wrapper foppl-code))
+  (println program)
+  (def compiled-program (foppl-compiler foppl-code))
+  (println compiled-program)
 
-  ;(foppl-compiler foppl-code)
+  (println "==================================================================")
+  (println "Homework 1: Problem 4 \n")
+  (def foppl-code '( (let [weight-prior (normal 0 1)
+                            W_0 (foreach 10 []
+                                  (foreach 1 [] (sample weight-prior)))
+                            W_1 (foreach 10 []
+                                  (foreach 10 [] (sample weight-prior)))
+                            W_2 (foreach 1 []
+                                  (foreach 10 [] (sample weight-prior)))
+                            b_0 (foreach 10 []
+                                  (foreach 1 [] (sample weight-prior)))
+                            b_1 (foreach 10 []
+                                  (foreach 1 [] (sample weight-prior)))
+                            b_2 (foreach 1 []
+                                  (foreach 1 [] (sample weight-prior)))
+                            x   (mat-transpose [[1] [2] [3] [4] [5]])
+                            y   [[1] [4] [9] [16] [25]]
+                            h_0 (mat-tanh (mat-add (mat-mul W_0 x)
+                                                   (mat-repmat b_0 1 5)))
+                            h_1 (mat-tanh (mat-add (mat-mul W_1 h_0)
+                                                   (mat-repmat b_1 1 5)))
+                            mu  (mat-transpose
+                                  (mat-tanh (mat-add (mat-mul W_2 h_1)
+                                                     (mat-repmat b_2 1 5))))]
+                          (foreach 5 [y_r y
+                                      mu_r mu]
+                             (foreach 1 [y_rc y_r
+                                         mu_rc mu_r]
+                                (observe (normal mu_rc 1) y_rc)))
+                          [W_0 b_0 W_1 b_1]) ) )
 
-  ; (println "==================================================================")
-  ; (println "Homework 1: Problem 2 \n")
-  ; (def foppl-code '( (defn observe-data [_ data slope bias]
-  ;                         (let [xn (first data)
-  ;                               yn (second data)
-  ;                               zn (+ (* slope xn) bias)]
-  ;                           (observe (normal zn 1.0) yn)
-  ;                           (rest (rest data))))
-  ;                     (let [slope (sample (normal 0.0 10.0))
-  ;                              bias  (sample (normal 0.0 10.0))
-  ;                              data (vector 1.0 2.1 2.0 3.9 3.0 5.3
-  ;                                           4.0 7.7 5.0 10.2 6.0 12.9)]
-  ;                    (loop 6 data observe-data slope bias)
-  ;                    (vector slope bias)) ))
-  ;
-  ; (foppl-compiler foppl-code)
-  ;
-  ; (println "==================================================================")
-  ; (println "Homework 1: Problem 3 \n")
-  ; (def foppl-code '( (defn hmm-step [t states data trans-dists likes]
-  ;                         (let [z (sample (get trans-dists
-  ;                                              (last states)))]
-  ;                           (observe (get likes z)
-  ;                                    (get data t))
-  ;                           (append states z)))
-  ;                     (let [data [0.9 0.8 0.7 0.0 -0.025 -5.0 -2.0 -0.1
-  ;                               0.0 0.13 0.45 6 0.2 0.3 -1 -1]
-  ;                         trans-dists [(discrete [0.10 0.50 0.40])
-  ;                                      (discrete [0.20 0.20 0.60])
-  ;                                      (discrete [0.15 0.15 0.70])]
-  ;                         likes [(normal -1.0 1.0)
-  ;                                (normal 1.0 1.0)
-  ;                                (normal 0.0 1.0)]
-  ;                         states [(sample (discrete [0.33 0.33 0.34]))]]
-  ;                     (loop 16 states hmm-step data trans-dists likes)) ))
-  ; (foppl-compiler foppl-code)
-  ;
-  ; (println "==================================================================")
-  ; (println "Homework 1: Problem 4 \n")
-  ; (def foppl-code '( (let [weight-prior (normal 0 1)
-  ;                           W_0 (foreach 10 []
-  ;                                 (foreach 1 [] (sample weight-prior)))
-  ;                           W_1 (foreach 10 []
-  ;                                 (foreach 10 [] (sample weight-prior)))
-  ;                           W_2 (foreach 1 []
-  ;                                 (foreach 10 [] (sample weight-prior)))
-  ;                           b_0 (foreach 10 []
-  ;                                 (foreach 1 [] (sample weight-prior)))
-  ;                           b_1 (foreach 10 []
-  ;                                 (foreach 1 [] (sample weight-prior)))
-  ;                           b_2 (foreach 1 []
-  ;                                 (foreach 1 [] (sample weight-prior)))
-  ;                           x   (mat-transpose [[1] [2] [3] [4] [5]])
-  ;                           y   [[1] [4] [9] [16] [25]]
-  ;                           h_0 (mat-tanh (mat-add (mat-mul W_0 x)
-  ;                                                  (mat-repmat b_0 1 5)))
-  ;                           h_1 (mat-tanh (mat-add (mat-mul W_1 h_0)
-  ;                                                  (mat-repmat b_1 1 5)))
-  ;                           mu  (mat-transpose
-  ;                                 (mat-tanh (mat-add (mat-mul W_2 h_1)
-  ;                                                    (mat-repmat b_2 1 5))))]
-  ;                         (foreach 5 [y_r y
-  ;                                     mu_r mu]
-  ;                            (foreach 1 [y_rc y_r
-  ;                                        mu_rc mu_r]
-  ;                               (observe (normal mu_rc 1) y_rc)))
-  ;                         [W_0 b_0 W_1 b_1]) ))
-  ; (foppl-compiler foppl-code)
+  (def program (program-wrapper foppl-code))
+  (println program)
 
   (println "==================================================================")
   (println "==========================HOMEWORK 2==============================")
   (println "==================================================================")
+  (println "Homework 2: example: \n")
+  (def foppl-code '(fn [a b c] (/ (+ a (* 7 b)) (sin c))) )
+  (println "foppl code: " foppl-code)
+  (println (autodiff foppl-code [1.0 2.0 3.0]))
+  (println "numerical check that we are good: ")
+  (println (numerical-approx (fn [a b c] (/ (+ a (* 7 b)) (sin c)))
+                              [1.0 2.0 3.0] 0.0000001) )
+  (println "==================================================================")
+
+
+
   (println "Homework 2: Problem 1: \n")
   (def foppl-code '(fn [x] (exp (sin x))) )
   (println "foppl code: " foppl-code)
