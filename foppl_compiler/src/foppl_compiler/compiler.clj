@@ -21,6 +21,7 @@
     ; same as merge-graphs except we apply to outputs
     ; takes a union of vertices, edges, partial functions, observations
     ; then reduces partial functons so we only have link functions between rv
+    (if (not (= 'get primitive))
     	{:G { :V (flatten (remove nil? (set [(get (get g1 :G) :V) (get (get g2 :G) :V)])))
               :A (vec (remove empty? (concat (vector (get (get g1 :G) :A)) (vec (get (get g2 :G) :A)))))
               :P (remove empty? (flatten [(get (get g1 :G) :P) (get (get g2 :G) :P)]))
@@ -29,6 +30,13 @@
        	(try ( (resolve primitive) (get g1 :E) (get g2 :E) )
           (catch Exception e  (seq [primitive (get g1 :E) (get g2 :E)]) )  )
        }
+       {:G { :V (flatten (remove nil? (set [(get (get g1 :G) :V) (get (get g2 :G) :V)])))
+               :A (vec (remove empty? (concat (vector (get (get g1 :G) :A)) (vec (get (get g2 :G) :A)))))
+               :P (remove empty? (flatten [(get (get g1 :G) :P) (get (get g2 :G) :P)]))
+               :Y (flatten (remove nil? (set [(get (get g1 :G) :Y) (get (get g2 :G) :Y)])))}
+        :E (seq [primitive (get g1 :E) (get g2 :E)])
+        }
+       )
     )
 (defn resolve-primitive [g primitive]
     ; same as merge-graphs except we apply to outputs
@@ -282,6 +290,12 @@
                       (translate (nth (second branch) 1) phi rho)
                       (translate (nth (second branch) 3) phi rho)
                       'normal)
+            (= (first branch) :discrete)
+            		(merge-graphs-apply
+                      (translate (nth (second branch) 1) phi rho)
+                      (translate (nth (second branch) 3) phi rho)
+                      'discrete)
+
             (and (= (first branch) :apply) (not (= (second branch) :observe)))
             		(try
                       (cond
@@ -306,8 +320,12 @@
                 (let [GE_i (into [] (for [argument (nth branch 3)] (translate argument phi rho)))
                       function-args (into [] (get-in rho [(second branch) :args]))
                       function-statement (into [] (get-in rho [(second branch) :eval]))]
-                    (println GE_i "\n" (nth branch 3))
-                    (translate (into [] (convert-user-fn function-statement function-args (get GE_i :E))) phi rho))
+                  (merge-graph-vector
+                    (into [] (concat GE_i
+                    [(translate (into [] (convert-user-fn
+                      function-statement
+                      (take-last (count (into [] (for [G GE_i] (get G :E)))) function-args)
+                      (into [] (for [G GE_i] (get G :E))) )) phi rho)]))))
 
             (vector? (first branch))
               	(translate (first branch) phi rho)

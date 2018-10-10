@@ -8,7 +8,7 @@
 (defn mat-repmat [M r c]
   (let [R (reduce (partial m/join-along 0) (repeat r M))]
     (reduce (partial m/join-along 1) (repeat c R))))
-(defn sample [x] (sample* x))
+;(defn sample [x] (sample* x))
 
 
 ;helper functions

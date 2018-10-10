@@ -1,7 +1,7 @@
 
-(defn normpdf [x mu sigma] (exp (+ (- 0 (/ (* (- x mu) (- x mu))
-                                                  (* 2 (* sigma sigma))))
-                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+(defn normpdf [x mu sigma]  (+ (- 0 (/ (* (- x mu) (- x mu))
+                                                (* 2 (* sigma sigma))))
+                                     (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma)))))) )
 
 ; need to fix what is being passed where, the function is evaluating through
 (defn function-logic-builder [general-ast, variables, argument]
@@ -35,20 +35,27 @@
           (= (second general-ast) "normpdf")
             {:node (symbol (str 'normalpdf (gensym)))
              :arg argument
-             :fxn (fn [x mu sigma] (exp (+ (- 0 (/ (* (- x mu) (- x mu))
-                                                             (* 2 (* sigma sigma))))
-                                                  (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+             :fxn (fn [x mu sigma]  (normpdf x mu sigma))
              :deriv
-               {"x" (fn [x mu sigma] (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
-                        (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma sigma)))))
-                "mu" (fn [x mu sigma] (- 0 (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
-                         (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma sigma))))))
-                "sigma" (fn [x mu sigma] (/ (* (- (* (- x mu) (- x mu) ) (* sigma sigma)) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
-                         (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma (* sigma sigma))))))}
+               {"x" (fn [x mu sigma] (*
+                 (/ 1 (exp (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                      (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+                 (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                        (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma sigma))))))
+                "mu" (fn [x mu sigma] (*
+                 (/ 1 (exp (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+                 (- 0 (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                         (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma sigma)))))))
+                "sigma" (fn [x mu sigma] (*
+                  (/ 1 (exp (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+                  (/ (* (- (* (- x mu) (- x mu) ) (* sigma sigma)) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                         (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma (* sigma sigma)))))))}
              :forward-pass-eval
-             (try (apply (fn [x mu sigma] (exp (+ (- 0 (/ (* (- x mu) (- x mu))
+             (try (apply (fn [x mu sigma] (+ (- 0 (/ (* (- x mu) (- x mu))
                                                              (* 2 (* sigma sigma))))
-                                                  (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+                                                  (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma)))))))
                 [(get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
                  (get (function-logic-builder (nth general-ast 3) variables "mu") :forward-pass-eval)
                  (get (function-logic-builder (nth general-ast 4) variables "sigma") :forward-pass-eval)] )
