@@ -170,7 +170,7 @@
   (def program (get-graph foppl-code))
   (def G (second program))
   (def initial-state (get-initial-value G))
-  (time (def samples (Gibbs-sampler initial-state G 150 75)))
+  (time (def samples (Gibbs-sampler initial-state G 20000 5000)))
   (println initial-state)
   (println
     (for [random-variables (filter #(re-find #"sample" (str %)) (keys (first samples)))]
@@ -199,7 +199,7 @@
   (def program (get-graph foppl-code))
   (def G (second program))
   (def initial-state (get-initial-value G))
-  (time (def samples (Gibbs-sampler initial-state G 150 75)))
+  (time (def samples (Gibbs-sampler initial-state G 10000 5000)))
   (println initial-state)
   (println
     (for [random-variables (filter #(re-find #"sample" (str %)) (keys (first samples)))]
@@ -224,7 +224,7 @@
   (def program (get-graph foppl-code))
   (def G (second program))
   (def initial-state (get-initial-value G))
-  (time (def samples (Gibbs-sampler initial-state G 150 75)))
+  (time (def samples (Gibbs-sampler initial-state G 10000 5000)))
   (println initial-state)
   (println
     (for [random-variables (filter #(re-find #"sample" (str %)) (keys (first samples)))]
@@ -266,7 +266,7 @@
   (def program (get-graph foppl-code))
   (def G (second program))
   (def initial-state (get-initial-value G))
-  (time (def samples (Gibbs-sampler initial-state G 150 75)))
+  (time (def samples (Gibbs-sampler initial-state G 10000 5000)))
   (println initial-state)
   (println
     (for [random-variables (filter #(re-find #"sample" (str %)) (keys (first samples)))]
@@ -290,7 +290,26 @@
   (def program (get-graph foppl-code))
   (def G (second program))
   (def initial-state (get-initial-value G))
-  (time (def samples (Gibbs-sampler initial-state G 150 75)))
+  (time (def samples (Gibbs-sampler initial-state G 10000 5000)))
   (println initial-state)
-
+  (println (for [random-variables (filter #(re-find #"sample" (str %)) (keys (first samples)))]
+    {random-variables
+      {:sample-mean
+         (/ (reduce + (for [realizations samples]
+           (get realizations random-variables))) (count samples))
+       :sample-variance
+       (/ (reduce +
+             (for [x samples]
+               (* (- (get x random-variables)
+                   (/ (reduce +
+                     (for [realizations samples]
+                         (get realizations random-variables)))
+                   (count samples)))
+                 (- (get x random-variables)
+                   (/ (reduce +
+                     (for [realizations samples]
+                         (get realizations random-variables)))
+                     (count samples))))))
+       (- (count samples) 1))
+          }}))
   )

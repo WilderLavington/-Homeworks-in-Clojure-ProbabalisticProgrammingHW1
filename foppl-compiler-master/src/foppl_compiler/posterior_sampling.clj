@@ -17,7 +17,13 @@
 
 
 
-(defn dirac [point-mass] (normal point-mass 0.000005))
+(defn dirac [point-mass] (normal point-mass 0.0005))
+
+; (defn get-continuous-distributions [G]
+;   (remove nil?
+;     (for [link-funcitons (get G :Y)]
+;     ))
+;   )
 
 (defn get-pdf-eval [quoted-sample value] ;returns log pdf eval
   (if (str/includes? (str quoted-sample) "observe")
@@ -80,12 +86,18 @@
   (apply merge-with into (for [m maps, [k v] m] {k [v]})))
 
 (defn Gibbs-sampler [initial-state G S burn-in]
-    (drop burn-in (into [] (loop [iter 0
+    (into [] (loop [iter 0
                     samples [initial-state]]
-        (if (>= iter S )
-            samples (recur (inc iter)
-                       (conj samples (Gibbs-step (last samples) G) )
-                       ))))))
+        (if (= 0 (mod iter 1000)) (println "samples generated: " iter " out of " S))
+        (cond
+          (>= iter S)
+            samples
+          (and (< iter S ) (> iter burn-in ))
+            (recur (inc iter) (conj samples (Gibbs-step (last samples) G) ))
+          (and (< iter S ) (<= iter burn-in ))
+            (recur (inc iter) [(Gibbs-step (last samples) G)] )
+                       ))))
+
 (defn sum-over-rows [A]
     (let [columns (count (first A))
           rows (count A)]
@@ -105,10 +117,10 @@
         ))
 
 
-(defn calculate-covariance-matrix [samples]
-  ; first make a hashmap for the columns of each variable
-  (zipmap (keys (first samples)) (take (count (keys (first samples))) (range)))
-  ;now we iterate through samples and build a matrix
-
-
-  )
+; (defn calculate-covariance-matrix [samples]
+;   ; first make a hashmap for the columns of each variable
+;   (zipmap (keys (first samples)) (take (count (keys (first samples))) (range)))
+;   ;now we iterate through samples and build a matrix
+;
+;
+;   )
