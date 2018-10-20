@@ -2,12 +2,15 @@
   "This namespace contains an implementation of a FOPPL compiler following chapter
   3.1 of 'An Introduction to Probabilistic Programming' by van de Meent et al."
   (:require [clojure.set :as set]
-            [anglican.runtime :refer :all]
+            ;[anglican.runtime :refer :all]
             [anglican.runtime :refer [sample* observe* normal]]
             [clojure.string :as str]
             [foppl-compiler.desugar :refer [desugar]]
             [foppl-compiler.parser :refer :all]
             [foppl-compiler.posterior_sampling :refer :all]
+            [foppl-compiler.hmc :refer :all]
+            [foppl-compiler.auto-diff :refer :all]
+            ;[foppl-compiler.hmc :refer :all]
             [foppl-compiler.substitute :refer [substitute]]
             [foppl-compiler.partial-evaluation :refer [partial-evaluation]]
             [foppl-compiler.symbolic-simplify :refer [symbolic-simplify]]
@@ -151,228 +154,38 @@
                     (inc idx))))))
 
 
-(load-file "/Users/wilder/Desktop/foppl-compiler-master/src/foppl_compiler/posterior_sampling.clj")
-(load-file "/Users/wilder/Desktop/foppl-compiler-master/src/foppl_compiler/parser.clj")
+;(load-file "/Users/wilder/Desktop/foppl-compiler-master/src/foppl_compiler/posterior_sampling.clj")
 
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
   (println "==================================================================")
-  (println "==========================HOMEWORK 3==============================")
+  (println "==========================HOMEWORK 4==============================")
   (println "==================================================================")
-  ; (println "Homework 3: Problem 1 \n")
-  ; (def foppl-code '( (let [mu (sample (normal 1 (sqrt 5)))
-  ;                          sigma (sqrt 2)
-  ;                          lik (normal mu sigma)]
-  ;                      (observe lik 8)
-  ;                      (observe lik 9)
-  ;                      mu) ))
-  ; (def program (get-graph foppl-code))
-  ; (def G (second program))
-  ; (def E (last program))
-  ; (def initial-state (get-initial-value G))
-  ; (time (def samples (drop 1 (Gibbs-sampler initial-state G E 20000 10000 1 100))))
-  ; (println initial-state)
-  ; (println
-  ;   (for [random-variables (filter #(re-find #"sample" (str %)) (keys (last samples)))]
-  ;     (cond
-  ;         (vector? (get (first samples) random-variables) )
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (matrix-average (into [] (for [realizations samples]
-  ;                (get realizations random-variables))) (count samples)) }}
-  ;         (boolean? (get (first samples) random-variables) )
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (tf-average (into [] (for [realizations samples]
-  ;                (get realizations random-variables)))) }}
-  ;         :else
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (/ (reduce + (for [realizations samples]
-  ;             (get realizations random-variables))) (count samples)) }})))
-
-  ; (println "==================================================================")
-  ; (println "Homework 3: Problem 2 \n")
-  ; (def foppl-code '( (defn observe-data [_ data slope bias]
-  ;                     (let [xn (first data)
-  ;                           yn (second data)
-  ;                           zn (+ (* slope xn) bias)]
-  ;                       (observe (normal zn 1.0) yn)
-  ;                       (rest (rest data))))
-  ;                   (let [slope (sample (normal 0.0 10.0))
-  ;                         bias  (sample (normal 0.0 10.0))
-  ;                         data (vector 1.0 2.1 2.0 3.9 3.0 5.3
-  ;                                      4.0 7.7 5.0 10.2 6.0 12.9)]
-  ;                     (loop 6 data observe-data slope bias)
-  ;                     (vector slope bias)) ))
-  ; (def program (get-graph foppl-code))
-  ; (def G (second program))
-  ; (def E (last program))
-  ; (def initial-state (get-initial-value G))
-  ; (time (def samples (drop 1 (Gibbs-sampler initial-state G E 10000 5000 1 500))))
-  ; (println initial-state)
-  ; (println (last samples))
-  ; (println
-  ;   (for [random-variables (filter #(re-find #"sample" (str %)) (keys (last samples)))]
-  ;     (cond
-  ;         (vector? (get (last samples) random-variables) )
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (matrix-average (into [] (for [realizations samples]
-  ;                (get realizations random-variables))) (count samples)) }}
-  ;         (boolean? (get (last samples) random-variables) )
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (tf-average (into [] (for [realizations samples]
-  ;                (get realizations random-variables)))) }}
-  ;         :else
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (/ (reduce + (for [realizations samples]
-  ;             (get realizations random-variables))) (count samples)) }})))
-
-  ; (println "==================================================================")
-  ; (println "Homework 3: Problem 3 \n")
-  ; (def foppl-code '( (let [data [1.1 2.1 2.0 1.9 0.0 -0.1 -0.05]
-  ;                         likes (foreach 3 []
-  ;                                 (let [mu (sample (normal 0.0 10.0))
-  ;                                       sigma (sample (gamma 1.0 1.0))]
-  ;                                   (normal mu sigma)))
-  ;                         pi (sample (dirichlet [1.0 1.0 1.0]))
-  ;                         z-prior (discrete pi)
-  ;                         zs      (foreach 7 [y data]
-  ;                                   (let [z (sample z-prior)]
-  ;                                     (observe (get likes z) y)
-  ;                                     z))]
-  ;                     (= (first zs)
-  ;                        (second zs))) ))
-  ; (def program (get-graph foppl-code))
-  ; (def G (second program))
-  ; (def E (last program))
-  ; (def initial-state (get-initial-value G))
-  ; (time (def samples (drop 1 (Gibbs-sampler initial-state G E 4000 2000 1 100))))
-  ; ;(println samples)
-  ; (println
-  ;   (for [random-variables (filter #(re-find #"sample" (str %)) (keys (last samples)))]
-  ;     (cond
-  ;         (vector? (get (last samples) random-variables) )
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (matrix-average (into [] (for [realizations samples]
-  ;                (get realizations random-variables))) (count samples)) }}
-  ;         (boolean? (get (last samples) random-variables) )
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (tf-average (into [] (for [realizations samples]
-  ;                (get realizations random-variables)))) }}
-  ;         :else
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (/ (reduce + (for [realizations samples]
-  ;             (get realizations random-variables))) (count samples)) }})))
-
-  ; (println "==================================================================")
-  ; (println "Homework 3: Problem 4 \n")
-  ; (def foppl-code '( (let [sprinkler true
-  ;                         wet-grass true
-  ;                         is-cloudy (sample (flip 0.5))
-  ;
-  ;                         is-raining (if (= is-cloudy true )
-  ;                                       (sample (flip 0.8))
-  ;                                       (sample (flip 0.2)))
-  ;                         sprinkler-dist (if (= is-cloudy true)
-  ;                                           (flip 0.1)
-  ;                                           (flip 0.5))
-  ;                         wet-grass-dist (if (and (= sprinkler true)
-  ;                                                 (= is-raining true))
-  ;                                           (flip 0.99)
-  ;                                           (if (and (= sprinkler false)
-  ;                                                    (= is-raining false))
-  ;                                             (flip 0.0)
-  ;                                             (if (or (= sprinkler true)
-  ;                                                     (= is-raining true))
-  ;                                               (flip 0.9)
-  ;                                               1)))]
-  ;                     (observe sprinkler-dist sprinkler)
-  ;                     (observe wet-grass-dist wet-grass)
-  ;                     is-raining) ))
-  ; (def program (get-graph foppl-code))
-  ; (def G (second program))
-  ; (def E (last program))
-  ; (def initial-state (get-initial-value G))
-  ; (time (def samples (drop 1 (Gibbs-sampler initial-state G E 20000 10000 1 1000))))
-  ; (println initial-state)
-  ; (println
-  ;   (for [random-variables (filter #(re-find #"sample" (str %)) (keys (last samples)))]
-  ;     (cond
-  ;         (vector? (get (first samples) random-variables) )
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (matrix-average (into [] (for [realizations samples]
-  ;                (get realizations random-variables))) (count samples)) }}
-  ;         (boolean? (get (first samples) random-variables) )
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (tf-average (into [] (for [realizations samples]
-  ;                (get realizations random-variables)))) }}
-  ;         :else
-  ;         {random-variables
-  ;           {:sample-mean
-  ;              (/ (reduce + (for [realizations samples]
-  ;             (get realizations random-variables))) (count samples)) }})))
-
-  (println "==================================================================")
-  (println "Homework 3: Problem 5 \n")
-  (def foppl-code '( (let [x (sample (normal 0 10))
-                            y (sample (normal 0 10))]
-                        (observe (dirac (+ x y)) 7)
-                        [x y]) ))
-
+  (println "Homework 4: Problem 1 \n")
+  (def foppl-code '( (let [mu (sample (normal 1 (sqrt 5)))
+                           sigma (sqrt 2)
+                           lik (normal mu sigma)]
+                       (observe lik 8)
+                       (observe lik 9)
+                       mu) ))
   (def program (get-graph foppl-code))
   (def G (second program))
-  (def E (last program))
-  (def initial-state (get-initial-value G))
-  (time (def samples (drop 1 (Gibbs-sampler initial-state G E 20000 5000 50 500))))
-  (println initial-state)
-  (println
-    (for [random-variables (filter #(re-find #"sample" (str %)) (keys (first samples)))]
-        (cond
-            (vector? (get (first samples) random-variables) )
-            {random-variables
-              {:sample-mean
-                 (matrix-average (into [] (for [realizations samples]
-                   (get realizations random-variables))) (count samples))
-               :sample-variance
-                 (matrix-average (into []
-                     (for [x samples] (map *
-                         (into [] (map - (get x random-variables)
-                         (matrix-average (into [] (for [realizations samples]
-                           (get realizations random-variables))) (count samples))))
-                         (into [] (map - (get x random-variables)
-                         (matrix-average (into [] (for [realizations samples]
-                           (get realizations random-variables))) (count samples))))))) (- (count samples) 1))}}
-            (boolean? (get (first samples) random-variables) )
-            {random-variables
-              {:sample-mean
-                 (tf-average (into [] (for [realizations samples]
-                   (get realizations random-variables)))) }}
-            :else
-            {random-variables
-              {:sample-mean
-                 (/ (reduce + (for [realizations samples]
-                (get realizations random-variables))) (count samples))
-                :sample-variance
-                (/ (reduce + (for [x samples]
-                        (* (- (get x random-variables)
-                            (/ (reduce +
-                              (for [realizations samples]
-                                  (get realizations random-variables)))
-                            (count samples)))
-                          (- (get x random-variables)
-                            (/ (reduce +
-                              (for [realizations samples]
-                                  (get realizations random-variables)))
-                              (count samples))))))
-                (- (count samples) 1))}})))
+  (def initial-sample (get-initial-value G))
+  (def iterations 10)
+  (def integration-time 10)
+  (def step-size 0.1)
+  (def variable-mass [1])
+  (def variable (first (get-unobserved-rv G)))
+  (def momentum-sample (draw-momentum-vals variable-mass (get-unobserved-rv G)))
+  (def next-sample-W-momentum (leapfrop-integration G initial-sample momentum-sample integration-time step-size))
+
+
+  (let [momentum-sample (draw-momentum-vals variable-mass (get-unobserved-rv G))]
+    (let [next-sample-W-momentum (leapfrop-integration G initial-sample momentum-sample integration-time step-size)]
+
+    ))
+
+
+  ;(println (HMC-step G initial-sample iterations integration-time step-size variable-mass))
   )

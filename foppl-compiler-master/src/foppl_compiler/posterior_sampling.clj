@@ -15,23 +15,41 @@
                                   'flip 'anglican.runtime/flip}
       quoted-expression))
 
-
+; (defn my-eval [quoted-string]
+;   (cond
+;     (str/includes? (str quoted-sample) "observe")
+;         (cond
+;             (str/includes? (str quoted-sample) "normal")
+;
+;             (str/includes? (str quoted-sample) "dirichlet")
+;
+;             (str/includes? (str quoted-sample) "discrete")
+;
+;             (str/includes? (str quoted-sample) "dirac")
+;
+;             (str/includes? (str quoted-sample) "flip")
+;
+;           )
+;     (str/includes? (str quoted-sample) "sample")
+;         (cond
+;             (str/includes? (str quoted-sample) "normal")
+;
+;             (str/includes? (str quoted-sample) "dirichlet")
+;
+;             (str/includes? (str quoted-sample) "discrete")
+;
+;             (str/includes? (str quoted-sample) "dirac")
+;
+;             (str/includes? (str quoted-sample) "flip")
+;
+;           )
+;     :else
+;
+;
+;     )
+;   )
 
 (defn dirac [point-mass] (normal point-mass 0.0005))
-
-; (def distribution-types ;also includes function to check support
-;   {'discrete {'discrete (fn [integer states] (if (> integer states) )) 'flip (fn [integer states] (if (> integer states) )) }
-;    'continuous {normal dirichlet gamma dirac}})
-;
-; (def continuous-distributions )
-;
-;
-; (defn get-continuous-distributions [G]
-;   (remove nil?
-;     (for [link-funcitons (get G :Y)]
-;       (if )
-;       ))
-;   )
 
 (defn get-pdf-eval [quoted-sample value] ;returns log pdf eval
   (if (str/includes? (str quoted-sample) "observe")

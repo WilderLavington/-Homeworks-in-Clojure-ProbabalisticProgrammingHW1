@@ -276,10 +276,10 @@
   (if (= i 0)
     (reduce conj [`(~'+ ~d ~(first exprl))] (subvec exprl 1))
     (reduce conj (subvec exprl 0 i)
-            (reduce conj [`(~'+ ~d ~(get exprl i))] (subvec exprl (+ i 1)))))) 
+            (reduce conj [`(~'+ ~d ~(get exprl i))] (subvec exprl (+ i 1))))))
 
 (defn finite-difference-expr [expr args i d]
-  `(~'/ (~'- (~expr ~@(addd args i d)) (~expr ~@args)) ~d)) 
+  `(~'/ (~'- (~expr ~@(addd args i d)) (~expr ~@args)) ~d))
 
 (defn finite-difference-grad [expr]
   (let [[op args body] expr
@@ -289,9 +289,4 @@
     `(~'fn [~@args]
       (~'let [~d 0.001]
        ~fdes
-       #_~(zipmap argsyms fdes))))) 
-
-
-
-
-
+       #_~(zipmap argsyms fdes)))))
