@@ -15,40 +15,6 @@
                                   'flip 'anglican.runtime/flip}
       quoted-expression))
 
-; (defn my-eval [quoted-string]
-;   (cond
-;     (str/includes? (str quoted-sample) "observe")
-;         (cond
-;             (str/includes? (str quoted-sample) "normal")
-;
-;             (str/includes? (str quoted-sample) "dirichlet")
-;
-;             (str/includes? (str quoted-sample) "discrete")
-;
-;             (str/includes? (str quoted-sample) "dirac")
-;
-;             (str/includes? (str quoted-sample) "flip")
-;
-;           )
-;     (str/includes? (str quoted-sample) "sample")
-;         (cond
-;             (str/includes? (str quoted-sample) "normal")
-;
-;             (str/includes? (str quoted-sample) "dirichlet")
-;
-;             (str/includes? (str quoted-sample) "discrete")
-;
-;             (str/includes? (str quoted-sample) "dirac")
-;
-;             (str/includes? (str quoted-sample) "flip")
-;
-;           )
-;     :else
-;
-;
-;     )
-;   )
-
 (defn dirac [point-mass] (normal point-mass 0.0005))
 
 (defn get-pdf-eval [quoted-sample value] ;returns log pdf eval
@@ -70,6 +36,10 @@
     (let [vertices (get G :V)]
       (filter #(re-find #"sample" (str %)) vertices)
     ))
+(defn get-observed-rv [G]
+    (let [vertices (get G :V)]
+      (filter #(re-find #"observe" (str %)) vertices)
+    ))
 
 (defn evaluate-joint [G sample variable] ; returns the log of the joint
   ; find all link functions that contain variables
@@ -78,7 +48,7 @@
                               (if (str/includes? (str (val link-functions)) (str variable))
                               link-functions nil))))]
       (+ (reduce + (for [link-function relevent-link-fxns]
-            (get-pdf-eval (clojure.walk/postwalk-replace sample (val link-function)) (get sample (key link-function)) ) ) )
+         (get-pdf-eval (clojure.walk/postwalk-replace sample (val link-function)) (get sample (key link-function)) ) ) )
          (get-pdf-eval (clojure.walk/postwalk-replace sample (get (get G :P) variable)) (get sample variable))) ))
 
 (defn Accept [G variable current-sample new-sample current-joint-pdf new-joint-pdf] ;returns 1d rv
@@ -152,51 +122,3 @@
         {true 0 false (nth bins 0)})
         {(nth tf 0) (/ (nth bins 0) (reduce + bins))
          (nth tf 1) (/ (nth bins 1) (reduce + bins))})))
-
-; (defn lazy-Gibbs
-; 	([state G E]
-;     (lazy-seq (cons state (lazy-Gibbs
-;       (assoc (Gibbs-step state G) 'sampleprevoutput
-;       (eval (clojure-dependencies-suck (clojure.walk/postwalk-replace state E)))) G E)))))
-;
-; (defn lazy-mean [lazy-gibs-seq]
-;  ; takes lazy sequence and sums it recursively
-;  (loop [x lazy-gibs-seq
-;         sum 0]
-;        (if (empty? x)
-;          sum
-;         (recur (rest x) (my-add (my-add (first x)) sum)))))
-; ;
-; ; (defn get-averages [lazy-gibs-seq]
-; ;     ()
-; ;   )
-; ; (defn add-samples [sample1 sample2]
-; ;   (for [rv (keys sample1)])
-; ;   )
-;
-; (defn my-add-helper [x y]
-;  (cond
-;    (and (vector? x) (vector? y))
-;      (map + x y)
-;    (and (bool? x) (bool? y))
-;      {true (+ (if x 1 0) (if y 1 0)) false (+ (if x 0 1) (if y 0 1))}
-;    (and (map? x) (bool? y))
-;      {true (+ (get x true) (if y 1 0)) false (+ (get x false) (if y 0 1))}
-;    (and (bool? x) (map? y))
-;      {true (+ (get y true) (if x 1 0)) false (+ (get y false) (if x 0 1))}
-;    (and (map? x) (map? y))
-;      {true (+ (get y true) (get x true)) false (+ (get y false) (get x true))}
-;    :else
-;      (+ x y)
-;    ))
-;
-; (defn my-average [x n]
-;   (cond
-;     (vector? x)
-;       (for [x_ x] (/ x n))
-;     (map? x)
-;       {(nth (keys x) 0) (/ (nth (vals x) 0) n)
-;        (nth (keys x) 1) (/ (nth (vals x) 1) n)}
-;     :else
-;       (/ x n)
-;   ))

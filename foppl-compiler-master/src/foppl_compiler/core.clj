@@ -3,7 +3,7 @@
   3.1 of 'An Introduction to Probabilistic Programming' by van de Meent et al."
   (:require [clojure.set :as set]
             ;[anglican.runtime :refer :all]
-            [anglican.runtime :refer [sample* observe* normal]]
+            [anglican.runtime :refer [sample* observe* normal log]]
             [clojure.string :as str]
             [foppl-compiler.desugar :refer [desugar]]
             [foppl-compiler.parser :refer :all]
@@ -35,30 +35,6 @@
                             (fn? (var-get v)))
                    k))
                (mapcat ns-publics runtime-namespaces)))))
-
-
-
-(defn invert-graph [G]
-  (reduce (fn [acc m] (merge-with set/union acc m))
-          {}
-          (for [[p children] G
-                c children]
-            {c #{p}})))
-
-
-(defn topo-sort [{:keys [V A P]}]
-  (let [terminals
-        (loop [terminals []
-               A A
-               V V]
-          (let [ts (filter (comp empty? (invert-graph A)) V)
-                V (set/difference V (set ts))]
-            (if (empty? V)
-              (into terminals ts)
-              (recur (into terminals ts)
-                     (select-keys A V)
-                     V))))]
-    terminals))
 
 
 (defn graph->instructions [[rho G E]]
@@ -139,19 +115,19 @@
 
              ))
 
-(defn get-initial-value [G]
-   (let [ordered-sample-variables (filter #(re-find #"sample" (str %)) (topo-sort G))]
-        (loop [link-fxns (get G :P)
-              idx 0]
-          (if (>= idx (count ordered-sample-variables))
-              link-fxns
-              (recur (let [new-key {(nth ordered-sample-variables idx)
-                                    (if (seq? (eval (clojure-dependencies-suck (get link-fxns (nth ordered-sample-variables idx)))))
-                                              (into [] (eval (clojure-dependencies-suck (get link-fxns (nth ordered-sample-variables idx)))))
-                                              (eval (clojure-dependencies-suck (get link-fxns (nth ordered-sample-variables idx)))))}
-                           remaining-link-fxns (dissoc link-fxns (nth ordered-sample-variables idx))]
-                           (merge (clojure.walk/postwalk-replace new-key remaining-link-fxns) new-key))
-                    (inc idx))))))
+; (defn get-initial-value [G]
+;    (let [ordered-sample-variables (filter #(re-find #"sample" (str %)) (topo-sort G))]
+;         (loop [link-fxns (get G :P)
+;               idx 0]
+;           (if (>= idx (count ordered-sample-variables))
+;               link-fxns
+;               (recur (let [new-key {(nth ordered-sample-variables idx)
+;                                     (if (seq? (eval (clojure-dependencies-suck (get link-fxns (nth ordered-sample-variables idx)))))
+;                                               (into [] (eval (clojure-dependencies-suck (get link-fxns (nth ordered-sample-variables idx)))))
+;                                               (eval (clojure-dependencies-suck (get link-fxns (nth ordered-sample-variables idx)))))}
+;                            remaining-link-fxns (dissoc link-fxns (nth ordered-sample-variables idx))]
+;                            (merge (clojure.walk/postwalk-replace new-key remaining-link-fxns) new-key))
+;                     (inc idx))))))
 
 
 ;(load-file "/Users/wilder/Desktop/foppl-compiler-master/src/foppl_compiler/posterior_sampling.clj")
@@ -162,30 +138,93 @@
   (println "==================================================================")
   (println "==========================HOMEWORK 4==============================")
   (println "==================================================================")
-  (println "Homework 4: Problem 1 \n")
-  (def foppl-code '( (let [mu (sample (normal 1 (sqrt 5)))
-                           sigma (sqrt 2)
-                           lik (normal mu sigma)]
-                       (observe lik 8)
-                       (observe lik 9)
-                       mu) ))
+  ; (println "Homework 4: Problem 1 \n")
+  ; (def foppl-code '( (let [mu (sample (normal 1 (sqrt 5)))
+  ;                          sigma (sqrt 2)
+  ;                          lik (normal mu sigma)]
+  ;                      (observe lik 8)
+  ;                      (observe lik 9)
+  ;                      mu) ))
+  ; ; pre-reqs for algorithm
+  ; (def program (get-graph foppl-code))
+  ; (def G (second program))
+  ; (def E (last program))
+  ; (def initial-sample (get-initial-value G))
+  ;
+  ; ; hyper-parameters
+  ; (def integration-time 3)
+  ; (def step-size 0.5)
+  ; (def variable-mass 3)
+  ; (def burn-in  5000)
+  ; (def total-samples 10000)
+  ; (def n (+ (- total-samples burn-in) 1))
+  ;
+  ; ; now start sampling
+  ; (def samples (drop burn-in (take total-samples (HMC-generator G initial-sample 0 integration-time step-size variable-mass E))))
+  ; (println "time start: " (.toString (java.util.Date.)))
+  ; (println "average: " (/ (reduce + (into [] samples)) n))
+  ; (println "time end: " (.toString (java.util.Date.)))
+
+  ; (println "==================================================================")
+  ; (println "Homework 4: Problem 2 \n")
+  ; (def foppl-code '( (defn observe-data [_ data slope bias]
+  ;                       (let [xn (first data)
+  ;                             yn (second data)
+  ;                             zn (+ (* slope xn) bias)]
+  ;                         (observe (normal zn 1.0) yn)
+  ;                         (rest (rest data))))
+  ;
+  ;                     (let [slope (sample (normal 0.0 10.0))
+  ;                           bias  (sample (normal 0.0 10.0))
+  ;                           data (vector 1.0 2.1 2.0 3.9 3.0 5.3
+  ;                                        4.0 7.7 5.0 10.2 6.0 12.9)]
+  ;                       (loop 6 data observe-data slope bias)
+  ;                       (vector slope bias)) ))
+  ; ; pre-reqs for algorithm
+  ; (def program (get-graph foppl-code))
+  ; (def G (second program))
+  ; (def E (last program))
+  ; (def initial-sample (get-initial-value G))
+  ;
+  ; ; hyper-parameters
+  ; (def integration-time 1)
+  ; (def step-size 0.1)
+  ; (def variable-mass 1)
+  ; (def burn-in 1000)
+  ; (def total-samples 10000)
+  ; (def n (+ (- total-samples burn-in) 1))
+  ;
+  ; ; now start sampling
+  ; (def samples (drop burn-in (take total-samples (HMC-generator G initial-sample 0 integration-time step-size variable-mass E))))
+  ; (println "time start: " (.toString (java.util.Date.)))
+  ; (println "averages: " (map #(/ % n) (into [] (apply map + (into [] samples)))))
+  ; (println "time end: " (.toString (java.util.Date.)))
+
+  (println "==================================================================")
+  (println "Homework 4: Problem 3 \n")
+  (def foppl-code '( (let [x (sample (normal 0 10))
+                            y (sample (normal 0 10))]
+                        (observe (dirac (+ x y)) 7)
+                        [x y]) ))
+
+  ; pre-reqs for algorithm
   (def program (get-graph foppl-code))
   (def G (second program))
+  (def E (last program))
   (def initial-sample (get-initial-value G))
-  (def iterations 10)
-  (def integration-time 10)
+
+  ; hyper-parameters
+  (def integration-time 2)
   (def step-size 0.1)
-  (def variable-mass [1])
-  (def variable (first (get-unobserved-rv G)))
-  (def momentum-sample (draw-momentum-vals variable-mass (get-unobserved-rv G)))
-  (def next-sample-W-momentum (leapfrop-integration G initial-sample momentum-sample integration-time step-size))
+  (def variable-mass 1)
+  (def burn-in 1000)
+  (def total-samples 10000)
+  (def n (+ (- total-samples burn-in) 1))
 
+  ; now start sampling
+  (def samples (drop burn-in (take total-samples (HMC-generator G initial-sample 0 integration-time step-size variable-mass E))))
+  (println "time start: " (.toString (java.util.Date.)))
+  (println "averages: " (map #(/ % n) (into [] (apply map + (into [] samples)))))
+  (println "time end: " (.toString (java.util.Date.)))
 
-  (let [momentum-sample (draw-momentum-vals variable-mass (get-unobserved-rv G))]
-    (let [next-sample-W-momentum (leapfrop-integration G initial-sample momentum-sample integration-time step-size)]
-
-    ))
-
-
-  ;(println (HMC-step G initial-sample iterations integration-time step-size variable-mass))
   )

@@ -4,9 +4,13 @@
             [foppl-compiler.parser :refer :all]
             [clojure.string :as str]))
 
-(defn normpdf [x mu sigma]  (+ (- 0 (/ (* (- x mu) (- x mu))
-                                                (* 2 (* sigma sigma))))
-                                     (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma)))))) )
+(defn NaN?
+  "Test if this number is nan"
+  [x]
+  ; Nan is the only value for which equality is false
+  (Double/isNaN x))
+
+(defn normpdf [x mu sigma] (observe* (normal mu sigma) x))
 
 ; need to fix what is being passed where, the function is evaluating through
 (defn function-logic-builder [general-ast, variables, argument]
@@ -40,30 +44,46 @@
           (= (second general-ast) "normpdf")
             {:node (symbol (str 'normalpdf (gensym)))
              :arg argument
-             :fxn (fn [x mu sigma]  (normpdf x mu sigma))
+             :fxn (fn [x mu sigma] (normpdf x mu sigma))
              :deriv
-               {"x" (fn [x mu sigma] (*
-                 (/ 1 (exp (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
-                                                      (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
-                 (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
-                        (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma sigma))))))
-                "mu" (fn [x mu sigma] (*
-                 (/ 1 (exp (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
-                                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
-                 (- 0 (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
-                         (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma sigma)))))))
-                "sigma" (fn [x mu sigma] (*
-                  (/ 1 (exp (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
-                                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma))))))))
+               {"x" (fn [x mu sigma]
+                 (if (NaN?
+                   (* (exp (* -1 (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                      (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589794 (* sigma sigma))))))))
+                                                      (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                        (* (pow (* 2 3.141592653589794) 0.5) (* sigma (* sigma sigma))))))
+                   0
+                   (* (exp (* -1 (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589794 (* sigma sigma))))))))
+                                                       (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                        (* (pow (* 2 3.141592653589794) 0.5) (* sigma (* sigma sigma)))))))
+                "mu" (fn [x mu sigma]
+                  (if (NaN?
+                   (* (exp (* -1 (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592 (* sigma sigma))))))))
+                   (- 0 (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                         (* (pow (* 2 3.141592653589794) 0.5) (* sigma (* sigma sigma)))))))
+                   0
+                   (* (exp (* -1 (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                          (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589794 (* sigma sigma))))))))
+                   (- 0 (/ (* (- mu x) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                            (* (pow (* 2 3.141592653589794) 0.5) (* sigma (* sigma sigma)))))) ))
+                "sigma" (fn [x mu sigma]
+                  (if (NaN?
+                  (* (exp (* -1 (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589794 (* sigma sigma))))))))
                   (/ (* (- (* (- x mu) (- x mu) ) (* sigma sigma)) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
-                         (* (pow (* 2 3.141592653589793) 0.5) (* sigma (* sigma (* sigma sigma)))))))}
+                         (* (pow (* 2 3.141592653589794) 0.5) (* sigma (* sigma (* sigma sigma)))))))
+                  0
+                  (* (exp (* -1 (+ (- 0 (/ (* (- x mu) (- x mu)) (* 2 (* sigma sigma))))
+                                                       (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589794 (* sigma sigma))))))))
+                  (/ (* (- (* (- x mu) (- x mu) ) (* sigma sigma)) (exp (/ (- 0 (* (- x mu) (- x mu))) (* 2 (* sigma sigma))) ))
+                         (* (pow (* 2 3.141592653589794) 0.5) (* sigma (* sigma (* sigma sigma)))))) ))}
              :forward-pass-eval
-             (try (apply (fn [x mu sigma] (+ (- 0 (/ (* (- x mu) (- x mu))
-                                                             (* 2 (* sigma sigma))))
-                                                  (* (- 0 (/ 1 2)) (log (* 2 (* 3.141592653589793 (* sigma sigma)))))))
+             (try (apply (fn [x mu sigma] (normpdf x mu sigma))
                 [(get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
                  (get (function-logic-builder (nth general-ast 3) variables "mu") :forward-pass-eval)
-                 (get (function-logic-builder (nth general-ast 4) variables "sigma") :forward-pass-eval)] )
+                 (get (function-logic-builder (nth general-ast 4) variables "sigma") :forward-pass-eval)])
              (catch Exception e (seq ['normpdf
                 (get (function-logic-builder (nth general-ast 2) variables "x") :forward-pass-eval)
                 (get (function-logic-builder (nth general-ast 3) variables "mu") :forward-pass-eval)
@@ -296,7 +316,7 @@
              :deriv (get g :deriv)
              :forward-pass-eval (get g :forward-pass-eval)
              :forward-pass-graph
-            (try
+            ;(try
                   (let [argument-variable (into [] (keys (get g :forward-pass-graph)))
                         sub-graphs (into [] (vals (get g :forward-pass-graph)))]
 
@@ -311,7 +331,7 @@
                                      (inc level))}
 
                          ))))
-            (catch Exception e (println "\n error!!! \n" level "\n error!!!\n")))
+            ;(catch Exception e (println "\n error!!! \n" level last-partial-eval "\n error!!!\n")))
             :reverse-auto-diff-eval
                 last-partial-eval
             }
@@ -388,4 +408,18 @@
         {:graphical-representation graph
          :gradient (correct-grad (into [] (rest (nth general-ast 2))) (calculate-gradient graph {}) )
          :eval (get graph :forward-pass-eval)}
+      ))))
+(defn autodiff-fast [f-expression arguments]
+    ;(println arguments)
+    ; takes in quoted expression f (i.e. '(fn ...) ) and its desired arguments then returns the
+    ; function evaluation as well as partials at that point with respect to
+    ; each of its variables (i.e. the gradient), additionally I added a numerical
+    ; check onto the return so we now we are right.
+    (let [general-ast (create-ast f-expression)]
+    (let [formatted-args (create-formatted-args (into [] (rest (nth general-ast 2))) arguments)]
+    (let [graph (reverse-mode-auto-diff (function-logic-builder (into [] (nth general-ast 3)) formatted-args "root") 1 0)]
+        {;:graphical-representation graph
+         :gradient (correct-grad (into [] (rest (nth general-ast 2))) (calculate-gradient graph {}) )
+         ;:eval (get graph :forward-pass-eval)
+         }
       ))))
