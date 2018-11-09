@@ -14,20 +14,27 @@
   (cond
     (vector? e)
       (cond
+        ; did we hit one of those pesky generic statements
+        (= (first e) :statement)
+          (interpretor-eval (first (rest e)) sigma el rho)
         ; are we in the outer program call?
         (= (first e) :program)
           ; update the set of programs being used at each step
-          (let [programs (drop 1 e)]
+          (let [programs (first (drop 1 e))]
+            ;(println "outer program loop")
             (loop [program_i 0
                    e_i e
                    sigma_i sigma
                    el_i el
                    rho_i rho]
+                   ;(println "program being digested " (nth programs program_i))
                 (cond
                   (>= program_i (count programs))
                     {'evaluation e_i 'sigma sigma_i 'el el_i 'rho rho_i}
                   (< program_i (count (second e)))
                     (let [program-evaluation (interpretor-eval (nth programs program_i) sigma_i el_i rho_i)]
+                      ;(println "")
+                      ;(println "This is a program eval - " program-evaluation)
                       (recur
                         (inc program_i)
                         (get program-evaluation 'evaluation)
@@ -44,9 +51,10 @@
 
         ; sample
         (= (first e) :sample)
-          (let [d-sigma (interpretor-eval (nth e 1) sigma el rho)]
-            {'evaluation (sample* (get d-sigma 'evaluation))
-             'sigma (get d-sigma 'sigma)
+          (let [d-sigma (interpretor-eval (nth e 1) sigma el rho)
+                the-sample (sample* (get d-sigma 'evaluation))]
+            {'evaluation the-sample
+             'sigma (+ sigma (get d-sigma 'sigma))
              'el el
              'rho rho})
 
@@ -61,57 +69,67 @@
 
         ; if statement
         (= (first e) :if)
-          (let [e1_prime (interpretor-eval (nth e 1) sigma el rho)]
+          (let [e1_prime (interpretor-eval (nth e 2) sigma el rho)]
             (if (get e1_prime 'evaluation)
-              (interpretor-eval (nth e 2) sigma el rho)
-              (interpretor-eval (nth e 3) sigma el rho)))
+              (interpretor-eval (nth e 4) sigma el rho)
+              (interpretor-eval (nth e 6) sigma el rho)))
 
         ; let statement
         (= (first e) :let)
-          (let [v (interpretor-eval (nth e 1) sigma el rho)
-                e1 (interpretor-eval (nth e 2) sigma el rho)]
-              (interpretor-eval (nth e 3) sigma
-                (assoc el (get v 'evaluation) (get e1 'evaluation))))
+          (let [v  (nth (second (second e)) 3)
+                e1 (interpretor-eval (nth (second (second e)) 5) sigma el rho)
+                statement (second (nth e 2))]
+              (interpretor-eval statement sigma (assoc el v (get e1 'evaluation)) rho))
 
         ; general expression
         (= (first e) :apply)
           (let [e0 (second e)
-                ci (for [ei (drop 2 e)] (get (interpretor-eval ei sigma el rho) 'evaluation))]
+                ci (into [] (for [ei (first (into [] (drop 3 e)))] (get (interpretor-eval ei sigma el rho) 'evaluation)))]
               (cond
-                (supported-expression? (get e0 'evaluation))
-                  (apply (get e0 'evaluation) ci)
+                (supported-expression? e0)
+                  {'evaluation (apply (resolve e0) ci)
+                  'sigma sigma 'el el 'rho rho}
                 :else
                   (println "error in general expression rule: " e sigma el)))
 
         ; user defined expression
         (= (first e) :user-apply)
           ; get function name and arguments
-          (let [e0 (second e)
-                ci (for [ei (drop 2 e)] (get (interpretor-eval ei sigma el rho) 'evaluation))]
+          (let [e0 (read-string (second e))
+                ci (first (into [] (for [ei (drop 3 e)] (get (interpretor-eval ei sigma el rho) 'evaluation))))]
               (cond
-                (contains? rho (get e0 'evaluation))
+                (contains? rho e0)
                   ; add variables + values to map then evaluate user function
-                  (let [function  (get (get rho (get e0 'evaluation)) :function)
-                        variables (get (get rho (get e0 'evaluation)) :variables)]
+                  (let [function  (get (get rho e0) :function)
+                        variables (get (get rho e0) :variables)]
                     (let [temporary-variable-map (merge el (zipmap variables ci))]
-                        (interpretor-eval sigma temporary-variable-map rho)))
+                        (interpretor-eval function sigma temporary-variable-map rho)))
                 :else
                   (println "error in user expression rule: " e sigma el)))
 
         ; random variables
         (= (first e) :normal)
-          (apply normal [(get (interpretor-eval (nth (second e) 1) sigma el rho) 'evaluation)
+          {'evaluation (apply normal [(get (interpretor-eval (nth (second e) 1) sigma el rho) 'evaluation)
                          (get (interpretor-eval (nth (second e) 3) sigma el rho) 'evaluation)])
+           'sigma sigma 'el el 'rho rho}
         (= (first e) :beta)
-          (apply beta [(get (interpretor-eval (nth (second e) 1) sigma el rho) 'evaluation)
+          {'evaluation (apply beta [(get (interpretor-eval (nth (second e) 1) sigma el rho) 'evaluation)
                        (get (interpretor-eval (nth (second e) 3) sigma el rho) 'evaluation)])
+          'sigma sigma 'el el 'rho rho}
         (= (first e) :uniform-continuous)
-          (apply uniform-continuous [(get (interpretor-eval (nth (second e) 1) sigma el rho) 'evaluation)
-                                     (get (interpretor-eval (nth (second e) 3) sigma el rho) 'evaluation)])
+          {'evaluation (apply uniform-continuous [(get (interpretor-eval (nth (second e) 1) sigma
+              el rho) 'evaluation) (get (interpretor-eval (nth (second e) 3) sigma el rho) 'evaluation)])
+          'sigma sigma 'el el 'rho rho}
         (= (first e) :discrete)
-          (apply discrete [(get (interpretor-eval (nth (second e) 1) sigma el rho) 'evaluation)])
+          {'evaluation (apply discrete [(get (interpretor-eval (nth (second e) 1) sigma
+          el rho) 'evaluation)])
+          'sigma sigma 'el el 'rho rho}
         (= (first e) :flip)
-          (apply flip [(get (interpretor-eval (nth (second e) 1) sigma el rho) 'evaluation)])
+          {'evaluation (apply flip [(get (interpretor-eval (nth (second e) 1) sigma
+                          el rho) 'evaluation)])
+           'sigma sigma 'el el 'rho rho}
+
+
 
         ; definition of user function
         (= (first e) :user-function)
@@ -130,7 +148,8 @@
                               :function  (nth e 6)})}
         ; just a vector
         :else
-          (into [] (for [v e] (get (interpretor-eval v sigma el rho) 'evaluation))))
+        {'evaluation (into [] (for [v e] (get (interpretor-eval v sigma el rho) 'evaluation)))
+         'sigma sigma 'el el 'rho rho})
 
       ; constant
       (number? e)
@@ -142,10 +161,12 @@
 
       ; error
       :else
-        (println "error in interpretor-eval" e sigma el rho)))
+        (println "error in interpretor-eval - " "e: " e ", sigma: " sigma ", el: " el ", rho: " rho)))
 
 
 (defn liklyhood-weighting [foppl-code L]
+  ;(println "AST: here it is - \n" (program-wrapper foppl-code))
+  (println "Samples: here they are - \n")
   (let [ast (program-wrapper foppl-code)]
     ; apply eval
     (loop [l 0

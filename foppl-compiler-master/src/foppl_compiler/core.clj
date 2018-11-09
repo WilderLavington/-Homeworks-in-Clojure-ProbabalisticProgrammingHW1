@@ -3,7 +3,7 @@
   3.1 of 'An Introduction to Probabilistic Programming' by van de Meent et al."
   (:require [clojure.set :as set]
             ;[anglican.runtime :refer :all]
-            [anglican.runtime :refer [sample* observe* normal log]]
+            [anglican.runtime :refer [sample* observe* normal log flip]]
             [clojure.string :as str]
             [foppl-compiler.desugar :refer [desugar]]
             [foppl-compiler.parser :refer :all]
@@ -141,58 +141,58 @@
   (println "==================================================================")
   (println "Homework 5: Problem 1 \n")
   (def foppl-code '(
-    (let [p 0.01
-      dist (flip p)
-      until-success (fn [p n]
-                       (if (sample dist)
-                         n
-                         (until-success p (+ n 1))))]
-     (until-success p 0)) ))
+    (defn until-success [p n]
+      (let [dist (flip p)]
+           (if (sample dist)
+           n
+           (until-success p (+ n 1)))))
+    (let [p 0.01]
+     (until-success p 0))))
 
   (println (liklyhood-weighting foppl-code 10))
 
-  (println "==================================================================")
-  (println "Homework 5: Problem 2 \n")
-  (def foppl-code '(
-      (defn marsaglia-normal [mean var]
-        (let [d (uniform-continuous -1.0 1.0)
-              x (sample d)
-              y (sample d)
-              s (+ (* x x ) (* y y ))]
-                (if (< s 1)
-                  (+ mean (* (sqrt var)
-                             (* x (sqrt (* -2 (/ ( log s) s))))))
-                  (marsaglia-normal mean var))))
-        (let [mu (marsaglia-normal 1 5)
-              sigma (sqrt 2)
-              lik (normal mu sigma)]
-          (observe lik 8)
-          (observe lik 9)
-          mu) ))
-
-  ;(println (format-interpretor foppl-code))
-
-  (println "==================================================================")
-  (println "Homework 5: Problem 3 \n")
-  (def foppl-code '(
-     (let [observations [0.9 0.8 0.7 0.0 -0.025 -5.0 -2.0 -0.1 0.0 0.13 0.45 6 0.2 0.3 -1 -1]
-      init-dist (discrete [1.0 1.0 1.0])
-      trans-dists {0 (discrete [0.1 0.5 0.4])
-                   1 (discrete [0.2 0.2 0.6])
-                   2 (discrete [0.15 0.15 0.7])}
-      obs-dists {0 (normal -1 1)
-                 1 (normal 1 1)
-                 2 (normal 0 1)}]
-      (reduce
-        (fn [states obs]
-          (let [state (sample (get trans-dists
-                                   (peek states)))]
-            (observe (get obs-dists state) obs)
-            (conj states state)))
-        [(sample init-dist)]
-        observations)) ))
-
-  ;(println (format-interpretor foppl-code))
+  ; (println "==================================================================")
+  ; (println "Homework 5: Problem 2 \n")
+  ; (def foppl-code '(
+  ;     (defn marsaglia-normal [mean var]
+  ;       (let [d (uniform-continuous -1.0 1.0)
+  ;             x (sample d)
+  ;             y (sample d)
+  ;             s (+ (* x x ) (* y y ))]
+  ;               (if (< s 1)
+  ;                 (+ mean (* (sqrt var)
+  ;                            (* x (sqrt (* -2 (/ ( log s) s))))))
+  ;                 (marsaglia-normal mean var))))
+  ;       (let [mu (marsaglia-normal 1 5)
+  ;             sigma (sqrt 2)
+  ;             lik (normal mu sigma)]
+  ;         (observe lik 8)
+  ;         (observe lik 9)
+  ;         mu) ))
+  ;
+  ; (println (liklyhood-weighting foppl-code 10))
+  ;
+  ; (println "==================================================================")
+  ; (println "Homework 5: Problem 3 \n")
+  ; (def foppl-code '(
+  ;    (let [observations [0.9 0.8 0.7 0.0 -0.025 -5.0 -2.0 -0.1 0.0 0.13 0.45 6 0.2 0.3 -1 -1]
+  ;     init-dist (discrete [1.0 1.0 1.0])
+  ;     trans-dists {0 (discrete [0.1 0.5 0.4])
+  ;                  1 (discrete [0.2 0.2 0.6])
+  ;                  2 (discrete [0.15 0.15 0.7])}
+  ;     obs-dists {0 (normal -1 1)
+  ;                1 (normal 1 1)
+  ;                2 (normal 0 1)}]
+  ;     (reduce
+  ;       (fn [states obs]
+  ;         (let [state (sample (get trans-dists
+  ;                                  (peek states)))]
+  ;           (observe (get obs-dists state) obs)
+  ;           (conj states state)))
+  ;       [(sample init-dist)]
+  ;       observations)) ))
+  ;
+  ; (println (liklyhood-weighting foppl-code 10))
 
   ; (println "==================================================================")
   ; (println "==========================HOMEWORK 4==============================")
