@@ -10,8 +10,12 @@
 
 (def crude-parser
   (insta/parser
-    "expression = '(' [''| ' '| definition  | expression | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '=>' | '<=' | '+' | '-' | '*' | '/' | #'_'+ | '.' | '=' ]* ')'
-     definition = '[' (''| ' '| definition  | expression | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '=>' | '<=' | '+' | '-' | '*' | '/' | #'_'+ | '.' | '=' )* ']'"))
+    "expression = '(' [ '' | ' '| definition | expression | dictionary | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '<' | '=>' | '<=' | '+'
+    | '-' | '*' | '/' | #'_'+ | '.' | ',' | '=' ]* ')'
+     definition = '[' [ '' | ' '| definition | expression | dictionary | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '<' | '=>' | '<=' | '+'
+    | '-' | '*' | '/' | #'_'+ | '.' | ',' | '=' ]* ']'
+     dictionary = '{' [ '' | ' '| definition | expression | dictionary | #'[a-zA-Z]+' | #'[0-9]+' | '>' | '<' | '=>' | '<=' | '+'
+    | '-' | '*' | '/' | #'_'+ | '.' | ',' | '=' ]* '}'"))
 
 (defn crude-parse [function-string]
     (into [] (crude-parser function-string)))
@@ -44,6 +48,7 @@
       (if (or (= (type (nth current-parse index)) clojure.lang.Keyword)
               (vector? (nth current-parse index))
               (= (nth current-parse index) "[") (= (nth current-parse index) "]")
+              (= (nth current-parse index) "{") (= (nth current-parse index) "}")
               (= (nth current-parse index) "(") (= (nth current-parse index) ")")
               (= (nth current-parse index) " "))
           (recur (inc index) current-parse)
@@ -58,6 +63,7 @@
                  (and (not (= (type (nth current-parse (+ index 1))) clojure.lang.Keyword))
                       (not (= (nth current-parse (+ index 1)) " "))
                       (not (= (nth current-parse (+ index 1)) "(")) (not (= (nth current-parse (+ index 1)) ")"))
+                      (not (= (nth current-parse (+ index 1)) "{")) (not (= (nth current-parse (+ index 1)) "}"))
                       (not (= (nth current-parse (+ index 1)) "[")) (not (= (nth current-parse (+ index 1)) "]")))
                    (recur 0 (forward-combine current-parse index))
                   :else
@@ -69,6 +75,7 @@
                   (and (not (= (type (nth current-parse (- index 1))) clojure.lang.Keyword))
                        (not (= (nth current-parse (- index 1)) " "))
                        (not (= (nth current-parse (- index 1)) "(")) (not (= (nth current-parse (- index 1)) ")"))
+                       (not (= (nth current-parse (- index 1)) "{")) (not (= (nth current-parse (- index 1)) "}"))
                        (not (= (nth current-parse (- index 1)) "[")) (not (= (nth current-parse (- index 1)) "]")))
                     (recur 0 (backward-combine current-parse index))
                   :else
@@ -80,22 +87,26 @@
                   (and (not (= (type (nth current-parse (+ index 1))) clojure.lang.Keyword))
                        (not (= (nth current-parse (+ index 1)) " "))
                        (not (= (nth current-parse (+ index 1)) "(")) (not (= (nth current-parse (+ index 1)) ")"))
+                       (not (= (nth current-parse (+ index 1)) "{")) (not (= (nth current-parse (+ index 1)) "}"))
                        (not (= (nth current-parse (+ index 1)) "[")) (not (= (nth current-parse (+ index 1)) "]")))
                     (recur 0 (forward-combine current-parse index))
                   ; reverse combine
                   (and (not (= (type (nth current-parse (- index 1))) clojure.lang.Keyword))
                        (not (= (nth current-parse (- index 1)) " "))
                        (not (= (nth current-parse (- index 1)) "(")) (not (= (nth current-parse (- index 1)) ")"))
+                       (not (= (nth current-parse (- index 1)) "{")) (not (= (nth current-parse (- index 1)) "}"))
                        (not (= (nth current-parse (- index 1)) "[")) (not (= (nth current-parse (- index 1)) "]")))
                     (recur 0 (backward-combine current-parse index))
                   ; total combine
                   (and (not (= (type (nth current-parse (+ index 1))) clojure.lang.Keyword))
                        (not (= (nth current-parse (+ index 1)) " "))
                        (not (= (nth current-parse (+ index 1)) "(")) (not (= (nth current-parse (+ index 1)) ")"))
+                       (not (= (nth current-parse (+ index 1)) "{")) (not (= (nth current-parse (+ index 1)) "}"))
                        (not (= (nth current-parse (+ index 1)) "[")) (not (= (nth current-parse (+ index 1)) "]"))
                        (not (= (type (nth current-parse (- index 1))) clojure.lang.Keyword))
                        (not (= (nth current-parse (- index 1)) " "))
                        (not (= (nth current-parse (- index 1)) "(")) (not (= (nth current-parse (- index 1)) ")"))
+                       (not (= (nth current-parse (- index 1)) "{")) (not (= (nth current-parse (- index 1)) "}"))
                        (not (= (nth current-parse (- index 1)) "[")) (not (= (nth current-parse (- index 1)) "]")))
                     (recur 0 (full-combine current-parse index))
                   :else
@@ -109,7 +120,7 @@
           x ) ) ))
 
 (defn filter-clean [refined]
-  (into [] (for [x (into [] (filter #(not (or (= " " %) (= "(" %) (= ")" %) (= "\n" %)
+  (into [] (for [x (into [] (filter #(not (or (= " " %) (= "(" %) (= ")" %) (= "{" %) (= "}" %) (= "\n" %)
                                               (= "]" %) (= "[" %) )) refined))]
       (if (vector? x)
            (filter-clean x)

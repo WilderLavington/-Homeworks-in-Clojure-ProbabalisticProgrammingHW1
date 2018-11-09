@@ -10,7 +10,8 @@
             [foppl-compiler.posterior_sampling :refer :all]
             [foppl-compiler.hmc :refer :all]
             [foppl-compiler.auto-diff :refer :all]
-            ;[foppl-compiler.hmc :refer :all]
+            [foppl-compiler.auto-diff :refer :all]
+            [foppl-compiler.interpretor :refer :all]
             [foppl-compiler.substitute :refer [substitute]]
             [foppl-compiler.partial-evaluation :refer [partial-evaluation]]
             [foppl-compiler.symbolic-simplify :refer [symbolic-simplify]]
@@ -136,8 +137,67 @@
   "I don't do a whole lot ... yet."
   [& args]
   (println "==================================================================")
-  (println "==========================HOMEWORK 4==============================")
+  (println "==========================HOMEWORK 5==============================")
   (println "==================================================================")
+  (println "Homework 5: Problem 1 \n")
+  (def foppl-code '(
+    (let [p 0.01
+      dist (flip p)
+      until-success (fn [p n]
+                       (if (sample dist)
+                         n
+                         (until-success p (+ n 1))))]
+     (until-success p 0)) ))
+
+  (println (liklyhood-weighting foppl-code 10))
+
+  (println "==================================================================")
+  (println "Homework 5: Problem 2 \n")
+  (def foppl-code '(
+      (defn marsaglia-normal [mean var]
+        (let [d (uniform-continuous -1.0 1.0)
+              x (sample d)
+              y (sample d)
+              s (+ (* x x ) (* y y ))]
+                (if (< s 1)
+                  (+ mean (* (sqrt var)
+                             (* x (sqrt (* -2 (/ ( log s) s))))))
+                  (marsaglia-normal mean var))))
+        (let [mu (marsaglia-normal 1 5)
+              sigma (sqrt 2)
+              lik (normal mu sigma)]
+          (observe lik 8)
+          (observe lik 9)
+          mu) ))
+
+  ;(println (format-interpretor foppl-code))
+
+  (println "==================================================================")
+  (println "Homework 5: Problem 3 \n")
+  (def foppl-code '(
+     (let [observations [0.9 0.8 0.7 0.0 -0.025 -5.0 -2.0 -0.1 0.0 0.13 0.45 6 0.2 0.3 -1 -1]
+      init-dist (discrete [1.0 1.0 1.0])
+      trans-dists {0 (discrete [0.1 0.5 0.4])
+                   1 (discrete [0.2 0.2 0.6])
+                   2 (discrete [0.15 0.15 0.7])}
+      obs-dists {0 (normal -1 1)
+                 1 (normal 1 1)
+                 2 (normal 0 1)}]
+      (reduce
+        (fn [states obs]
+          (let [state (sample (get trans-dists
+                                   (peek states)))]
+            (observe (get obs-dists state) obs)
+            (conj states state)))
+        [(sample init-dist)]
+        observations)) ))
+
+  ;(println (format-interpretor foppl-code))
+
+  ; (println "==================================================================")
+  ; (println "==========================HOMEWORK 4==============================")
+  ; (println "==================================================================")
+
   ; (println "Homework 4: Problem 1 \n")
   ; (def foppl-code '( (let [mu (sample (normal 1 (sqrt 5)))
   ;                          sigma (sqrt 2)
@@ -200,31 +260,31 @@
   ; (println "averages: " (map #(/ % n) (into [] (apply map + (into [] samples)))))
   ; (println "time end: " (.toString (java.util.Date.)))
 
-  (println "==================================================================")
-  (println "Homework 4: Problem 3 \n")
-  (def foppl-code '( (let [x (sample (normal 0 10))
-                            y (sample (normal 0 10))]
-                        (observe (dirac (+ x y)) 7)
-                        [x y]) ))
-
-  ; pre-reqs for algorithm
-  (def program (get-graph foppl-code))
-  (def G (second program))
-  (def E (last program))
-  (def initial-sample (get-initial-value G))
-
-  ; hyper-parameters
-  (def integration-time 2)
-  (def step-size 0.1)
-  (def variable-mass 1)
-  (def burn-in 1000)
-  (def total-samples 10000)
-  (def n (+ (- total-samples burn-in) 1))
-
-  ; now start sampling
-  (def samples (drop burn-in (take total-samples (HMC-generator G initial-sample 0 integration-time step-size variable-mass E))))
-  (println "time start: " (.toString (java.util.Date.)))
-  (println "averages: " (map #(/ % n) (into [] (apply map + (into [] samples)))))
-  (println "time end: " (.toString (java.util.Date.)))
+  ; (println "==================================================================")
+  ; (println "Homework 4: Problem 3 \n")
+  ; (def foppl-code '( (let [x (sample (normal 0 10))
+  ;                           y (sample (normal 0 10))]
+  ;                       (observe (dirac (+ x y)) 7)
+  ;                       [x y]) ))
+  ;
+  ; ; pre-reqs for algorithm
+  ; (def program (get-graph foppl-code))
+  ; (def G (second program))
+  ; (def E (last program))
+  ; (def initial-sample (get-initial-value G))
+  ;
+  ; ; hyper-parameters
+  ; (def integration-time 2)
+  ; (def step-size 0.1)
+  ; (def variable-mass 1)
+  ; (def burn-in 1000)
+  ; (def total-samples 10000)
+  ; (def n (+ (- total-samples burn-in) 1))
+  ;
+  ; ; now start sampling
+  ; (def samples (drop burn-in (take total-samples (HMC-generator G initial-sample 0 integration-time step-size variable-mass E))))
+  ; (println "time start: " (.toString (java.util.Date.)))
+  ; (println "averages: " (map #(/ % n) (into [] (apply map + (into [] samples)))))
+  ; (println "time end: " (.toString (java.util.Date.)))
 
   )
