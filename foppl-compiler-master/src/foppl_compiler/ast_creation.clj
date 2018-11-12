@@ -122,7 +122,7 @@
     (= :dictionary (get current-vector 0))
       (into []
         (loop [variable-map (rest current-vector)
-               mappings []]
+               mappings [:dictionary]]
         (if (empty? variable-map)
           mappings
           (recur
@@ -152,14 +152,25 @@
                        	(into [] (for [statement (drop 3 current-vector) ]
                           [:statement (definition-logic-builder statement)])) ]]])
 
-          	; basic functions
+          	; if statement
            (= "if" (get current-vector 1))
             [:if
              :boolean (definition-logic-builder (get current-vector 2))
              :then (definition-logic-builder (get current-vector 3))
              :else (definition-logic-builder (get current-vector 4))]
+            ; equality defs
            (= "=" (get current-vector 1))
           		[:apply '= :args (definition-logic-builder (into [] (drop 2 current-vector)))]
+           (= "<=" (get current-vector 1))
+          		[:apply '<= :args (definition-logic-builder (into [] (drop 2 current-vector)))]
+           (= ">=" (get current-vector 1))
+          		[:apply '>= :args (definition-logic-builder (into [] (drop 2 current-vector)))]
+           (= "<" (get current-vector 1))
+             [:apply '< :args (definition-logic-builder (into [] (drop 2 current-vector)))]
+           (= ">" (get current-vector 1))
+             [:apply '> :args (definition-logic-builder (into [] (drop 2 current-vector)))]
+
+           ; basic functions
            (= "vector" (get current-vector 1))
           		[:apply 'vector :args (definition-logic-builder (into [] (drop 2 current-vector)))]
            (= "first" (get current-vector 1))
@@ -251,6 +262,8 @@
   				    [:apply '/ :args (definition-logic-builder (into [] (drop 2 current-vector)))]
             (= "exp" (get current-vector 1))
           		[:apply 'exp :args (definition-logic-builder (into [] (drop 2 current-vector)))]
+            (= "log" (get current-vector 1))
+            	[:apply 'log :args (definition-logic-builder (into [] (drop 2 current-vector)))]
           	(= "sqrt" (get current-vector 1))
           		[:apply 'sqrt :args (definition-logic-builder (into [] (drop 2 current-vector)))]
 
